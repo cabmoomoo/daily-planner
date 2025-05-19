@@ -91,7 +91,7 @@ pub fn Table() -> Html {
         emp_rows.push(emp_row(employee));
     }
 
-    html!(<table>
+    html!(<table class={"mui-table mui-table--bordered"}>
         {table_header.clone()}
         {role_table}
         {table_header}

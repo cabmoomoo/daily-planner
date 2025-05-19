@@ -123,6 +123,34 @@ pub struct Business {
         }
         self.employees.insert(id.clone(), Employee::new(id, name, self.open.clone(), self.close.clone()));
     }
+    pub fn delete_role(&mut self, role: usize) {
+        let role_get = self.roles.remove(&role);
+        if role_get.is_none() {
+            return;
+        }
+        let role = role_get.unwrap();
+        for i in 0..role.assigned.len() {
+            let x = role.assigned[i];
+            if x.eq(&0) {
+                continue;
+            }
+            let employee = self.employees.get_mut(&x);
+            if employee.is_none() {
+                continue;
+            }
+            employee.unwrap().remove_block(vec![i]);
+        }
+    }
+    pub fn delete_employee(&mut self, emp: usize) {
+        let emp_get = self.employees.remove(&emp);
+        if emp_get.is_none() {
+            return;
+        }
+        let emp = emp_get.unwrap();
+        for (_,role) in self.roles.iter_mut() {
+            role.clear_employee(&emp.id);
+        }
+    }
 
     pub fn update_business_hours(&mut self, open: NaiveTime, close: NaiveTime) {
         self.open = open;
@@ -151,6 +179,18 @@ pub struct Business {
         employee.clear_assigned(&self.open, &self.close, self.block_size.clone());
         for (_, role) in self.roles.iter_mut() {
             role.clear_employee(&id);
+        }
+    }
+    pub fn assign_role(&mut self, emp: usize, role: usize) {
+        let employee = self.employees.get_mut(&emp).unwrap();
+        employee.add_role(role);
+    }
+    pub fn restrict_role(&mut self, emp: usize, role: usize) -> Result<()> {
+        let employee = self.employees.get_mut(&emp).unwrap();
+        let role = self.roles.get_mut(&role).unwrap();
+        match employee.remove_role(role.id.clone()) {
+            Ok(_) => {role.clear_employee(&emp); Ok(())},
+            Err(e) => Err(e)
         }
     }
 
@@ -366,16 +406,34 @@ pub struct Employee {
             self.roles.push(role);
         }
     }
-    pub fn remove_role(&mut self, role: &mut Role) -> Result<()> {
-        let index_find = self.roles.iter().find(|&&x| x.eq(&role.id));
-        match index_find {
-            None => return Err(BusinessError::EmployeeError(EmployeeError::NotAssignedRole { failed: role.id, allowed: self.roles.clone() })),
-            Some(index) => {
-                let index = index.clone();
-                self.roles.remove(index.try_into().unwrap());
+    pub fn remove_role(&mut self, role: usize) -> Result<()> {
+        // let index_find = self.roles.iter().find(|&&x| x.eq(&role));
+        // match index_find {
+        //     None => return Err(BusinessError::EmployeeError(EmployeeError::NotAssignedRole { failed: role, allowed: self.roles.clone() })),
+        //     Some(index) => {
+        //         let index = index.clone();
+        //         self.roles.remove(index.try_into().unwrap());
+        //     }
+        // }
+        let mut failed = true;
+        for i in 0..self.roles.len() {
+            let item = &self.roles[i];
+            if role.eq(item) {
+                self.roles.remove(i);
+                failed = false;
             }
         }
-        role.clear_employee(&self.id);
+        if failed {
+            return Err(BusinessError::EmployeeError(EmployeeError::NotAssignedRole { failed: role, allowed: self.roles.clone() }))
+        }
+        for i in 0..self.assigned.len() {
+            // let assigned_get = self.assigned.get(i);
+            if let Some(assigned) = self.assigned.get(i) {
+                if role.eq(assigned) {
+                    self.remove_block(vec![i]);
+                }
+            }
+        }
         Ok(())
     }
 }
