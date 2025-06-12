@@ -2,17 +2,17 @@
 
 use std::ops::Deref;
 
-use controls::*;
 use data::*;
+use log::info;
 use yew::prelude::*;
 use settings::Settings;
-use table::Table;
 
-mod controls;
+use crate::scheduler::{Controls, Table};
+
 mod data;
 mod events;
 mod settings;
-mod table;
+mod scheduler;
 
 pub type BusinessContext = UseReducerHandle<Business>;
 pub type TabContext = UseStateHandle<Tabs>;
@@ -28,6 +28,8 @@ fn App() -> Html {
     let business = use_reducer(|| Business::sample());
     let tab = use_state_eq(|| Tabs::Main);
 
+    // info!("{:#?}", business);
+
     let mut tab_styles = vec![None, None];
     match tab.deref() {
         Tabs::Main => tab_styles[0] = Some("mui--is-active"),
@@ -39,9 +41,13 @@ fn App() -> Html {
             <TabBar />
         </ContextProvider<TabContext>>
         <div class={classes!("mui-tabs__pane", tab_styles[0])}>
-            <Table />
-            <br />
-            <Controls />
+            <div class={"pane-content"}>
+                <Table />
+                <br />
+                <Controls />
+                <br />
+
+            </div>
         </div>
         <div class={classes!("mui-tabs__pane", tab_styles[1])}>
             <Settings />

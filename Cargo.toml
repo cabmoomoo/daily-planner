@@ -5,9 +5,10 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.40"
+dyn-clone = "1.0.19"
 log = "0.4.27"
 stylist = { version = "0.13.0", features = ["parser"] }
 wasm-logger = "0.2.0"
-web-sys = { version = "0.3.77", features = ["HtmlInputElement", "HtmlSelectElement", "HtmlTimeElement"] }
+web-sys = { version = "0.3.77", features = ["DataTransfer", "DragEvent", "HtmlInputElement", "HtmlSelectElement", "HtmlTimeElement"] }
 yew = { version = "0.21.0", features = ["csr"] }
 yew-mdc = { git = "https://github.com/dungeonfog/yew-mdc", version = "0.1.0" }

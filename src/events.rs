@@ -1,6 +1,8 @@
 use chrono::NaiveTime;
-use log::warn;
+use log::{error, info, warn};
 use yew::prelude::*;
+
+use crate::scheduler::{blocks::HeldBlock, TimeBlock};
 
 #[derive(Clone, PartialEq)]
 pub enum BusinessEvents {
@@ -10,9 +12,12 @@ pub enum BusinessEvents {
     DeleteEmployee { emp: usize },
     UpdateBusinessHours { open: NaiveTime, close: NaiveTime },
     UpdateEmployeeHours { employee: usize, clock_in: String, clock_out: String },
+    ToggleEmployeeScheduled { employee: usize },
     ToggleEmployeeRole { employee: usize, role: usize },
     AssignBlock { employee: usize, role: usize, blocks: Vec<usize> },
-    RemoveBlock { employee: usize, blocks: Vec<usize> }
+    RemoveBlock { employee: usize, blocks: Vec<usize> },
+
+    DragAssignBlock { target_block: TimeBlock, drag_block: TimeBlock, held_block: HeldBlock }
 }
 
 impl Reducible for crate::data::Business {
@@ -29,6 +34,7 @@ impl Reducible for crate::data::Business {
             BusinessEvents::UpdateEmployeeHours { employee, clock_in, clock_out } => {
                 business.update_employee_hours(employee, clock_in.parse().unwrap(), clock_out.parse().unwrap());
                 },
+            BusinessEvents::ToggleEmployeeScheduled { employee } => business.toggle_employee_scheduled(employee),
             BusinessEvents::ToggleEmployeeRole { employee, role } => {
                 let emp_get = business.employees.get(&employee);
                 if let Some(emp) = emp_get {
@@ -54,6 +60,47 @@ impl Reducible for crate::data::Business {
                     _ => ()
                 }
             },
+
+            BusinessEvents::DragAssignBlock { target_block, drag_block , held_block} => {
+                if target_block.role != drag_block.role || target_block.time_index != held_block.time_index {
+                    let mut target_block_time_indexes;
+                    let mut drag_block_time_indexes;
+                    if drag_block.len <= 1 {
+                        target_block_time_indexes = vec![target_block.time_index];
+                        drag_block_time_indexes = vec![drag_block.time_index]
+                    } else {
+                        target_block_time_indexes = vec![];
+                        drag_block_time_indexes = vec![];
+                        for i in 0..held_block.len {
+                            if i <= held_block.len_index {
+                                target_block_time_indexes.push(target_block.time_index - i);
+                                drag_block_time_indexes.push(held_block.time_index - i);
+                            } else {
+                                target_block_time_indexes.push(target_block.time_index + (i - held_block.len_index));
+                                drag_block_time_indexes.push(held_block.time_index + (i - held_block.len_index));
+                            }
+                        }
+                    }
+                    match business.assign_block(target_block.emp_id, drag_block.role, target_block_time_indexes.clone()) {
+                        Err(e) => warn!("Could not assign drag block {:#?}", e),
+                        Ok(_) => {
+                            if drag_block.emp_id != 0 {
+                                if drag_block.emp_id == target_block.emp_id {
+                                    let mut old_time_indexes = vec![];
+                                    for index in drag_block_time_indexes {
+                                        if !target_block_time_indexes.contains(&index) {
+                                            old_time_indexes.push(index);
+                                        }
+                                    }
+                                    let _ = business.remove_block(drag_block.emp_id, old_time_indexes);
+                                } else {
+                                    let _ = business.remove_block(drag_block.emp_id, drag_block_time_indexes);
+                                }
+                            }
+                        },
+                    }
+                }
+            }
         }
         return business.into()
     }

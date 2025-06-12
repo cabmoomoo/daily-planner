@@ -1,0 +1,48 @@
+/* .employee-table td, .employee-table th {
+    text-align: center !important; 
+} */
+
+:root {
+    --empty-block-color: #e0e0e0;
+}
+
+.mui-tabs__pane.mui--is-active{
+    display: flex;
+    justify-content: center;
+}
+
+.pane-content {
+    max-width: 1080px;
+}
+
+.mui-table {
+    text-align: center;
+    border-collapse: collapse;
+}
+
+.mui-table td {
+    padding: 0;
+}
+
+.time-block {
+    min-width: 40px;
+    min-height: 40px;
+
+    border-style: solid;
+    border-width: 1px;
+}
+
+.time-block.multi-block {
+    float: left;
+}
+
+
+.empty-block {
+    min-width: 39px;
+    min-height: 39px;
+
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--empty-block-color);
+    background-color: var(--empty-block-color);
+}

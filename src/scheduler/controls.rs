@@ -26,7 +26,7 @@ pub fn Controls() -> Html {
 
     let mut roles = vec![];
     for (id, role) in business.roles.iter() {
-        roles.push((id.clone(), role.name.clone(), role.sort.clone()))
+        roles.push((id.clone(), role.name(), role.sort()))
     }
     roles.sort_by(|a, b| a.2.cmp(&b.2));
     let mut role_options = vec![];
