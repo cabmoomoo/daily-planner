@@ -1,5 +1,5 @@
 use yew::{prelude::*, virtual_dom::VNode};
-use crate::{data::*, scheduler::blocks::*, BusinessContext};
+use crate::{data::*, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext};
 
 fn table_header(business: UseReducerHandle<Business>) -> Html {
     let mut table_header = vec![];
@@ -75,15 +75,47 @@ pub fn Table() -> Html {
     }
 
     html!(<>
-        <table class={"mui-table mui-table--bordered"}>
-            {table_header.clone()}
-            {role_table}
-        </table>
+        // <table class={"mui-table mui-table--bordered"}>
+        //     {table_header.clone()}
+        //     {role_table}
+        // </table>
+        {table_key(business.clone(), held_block.clone())}
         <table class={"mui-table mui-table--bordered"}>
             {table_header}
             {emp_table}
         </table>
     </>)
+}
+
+
+fn table_key(business: BusinessContext, held_block: HeldBlock) -> Html {
+    // let business = use_context::<BusinessContext>().expect("No ctx found");
+    // let held_block = use_context::<HeldBlock>().expect("No held block ctx found");
+    let colors = &business.role_colors;
+
+    let mut role_columns = vec![];
+    for (_, role) in business.roles.iter() {
+        let block_single = TimeBlock::new_simple(0, 0, role.id());
+        let block_multi = TimeBlock { emp_id: 0, time_index: 0, role: role.id(), len_index: 0,
+            len: match role.id() == 2 {
+                true => 2,
+                false => DEFAULT_SHIFT,
+            }
+        };
+        let mut style = None;
+        if colors.contains_key(&role.id()) {
+            style = Some("background-color: #".to_string() + &colors[&role.id()] + ";")
+        }
+        role_columns.push(html!(<div class="table-key-item">
+            {role.name()}
+            {drag_block(block_single, style.clone(), business.clone(), held_block.clone())}
+            {multi_block(block_multi, style, business.clone(), held_block.clone())}
+        </div>));
+    }
+
+    html!(<div class="table-key">
+        {role_columns}
+    </div>)
 }
 
 impl Employee {

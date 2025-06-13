@@ -3,6 +3,7 @@
 use std::ops::Deref;
 
 use data::*;
+use log::info;
 use yew::prelude::*;
 use settings::Settings;
 
@@ -11,6 +12,7 @@ use crate::scheduler::{Controls, Table};
 mod automation;
 mod data;
 mod events;
+mod persistence;
 mod settings;
 mod scheduler;
 
@@ -27,6 +29,15 @@ pub enum Tabs {
 fn App() -> Html {
     let business = use_reducer(|| Business::sample());
     let tab = use_state_eq(|| Tabs::Main);
+
+    // let doc = web_sys::Document::new().expect("Could not get document!");
+    let doc = web_sys::window().unwrap().document().unwrap();
+    let location = doc.location().unwrap();
+    let url = location.href().unwrap();
+    let base = url.split("?").next().unwrap();
+    // Hey hey that works!
+    location.set_hash("zip=aiufdghfjkdsguhkregs");
+    info!("{}", base);
 
     // info!("{:#?}", business);
 

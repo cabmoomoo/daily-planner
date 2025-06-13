@@ -84,7 +84,13 @@ impl Reducible for crate::data::Business {
                         }
                     }
                     match business.assign_block(target_block.emp_id, drag_block.role, target_block_time_indexes.clone()) {
-                        Err(e) => warn!("Could not assign drag block {:#?}", e),
+                        Err(e) => {
+                            if target_block.emp_id == 0 {
+                                let _ = business.remove_block(drag_block.emp_id, drag_block_time_indexes);
+                            } else {
+                                warn!("Could not assign drag block {:#?}", e);
+                            }
+                        },
                         Ok(_) => {
                             if drag_block.emp_id != 0 {
                                 if drag_block.emp_id == target_block.emp_id {

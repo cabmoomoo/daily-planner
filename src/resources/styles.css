@@ -6,7 +6,7 @@
     --empty-block-color: #e0e0e0;
 }
 
-.mui-tabs__pane.mui--is-active{
+.mui-tabs__pane.mui--is-active, .table-key{
     display: flex;
     justify-content: center;
 }
@@ -32,7 +32,7 @@
     border-width: 1px;
 }
 
-.time-block.multi-block {
+.time-block.multi-block, .table-key-item {
     float: left;
 }
 
