@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use chrono::{NaiveTime, TimeDelta};
 use dyn_clone::DynClone;
-use log::info;
-use yew::{AttrValue, prelude::*, Properties};
+use yew::{AttrValue, Properties};
 
-const DEFAULT_COLOR: &'static str = "00AAFF";
+const DEFAULT_COLOR: &'static str = "AAC406";
 
 pub type Result<T> = std::result::Result<T, BusinessError>;
 #[derive(Debug)]
@@ -105,6 +104,8 @@ pub struct Business {
             role_colors
         };
         business.update_business_hours(open, close);
+        business.schedule_lunch();
+        business.schedule_roles();
         business
     }
 
@@ -136,17 +137,23 @@ pub struct Business {
             return;
         }
         let role = role_get.unwrap();
-        let role_assigned = role.assigned();
-        for i in 0..role_assigned.len() {
-            let x = role_assigned[i];
-            if x.eq(&0) {
-                continue;
+        let role_assigned = match role.assigned() {
+            RoleAssigned::SingleAssinged(items) => vec![items],
+            RoleAssigned::MultiAssigned(items) => items,
+        };
+        // let role_assigned = role.assigned();
+        for time_slot in role_assigned {
+            for i in 0..time_slot.len() {
+                let x = time_slot[i];
+                if x.eq(&0) {
+                    continue;
+                }
+                let employee = self.employees.get_mut(&x);
+                if employee.is_none() {
+                    continue;
+                }
+                employee.unwrap().remove_block(vec![i]);
             }
-            let employee = self.employees.get_mut(&x);
-            if employee.is_none() {
-                continue;
-            }
-            employee.unwrap().remove_block(vec![i]);
         }
     }
     pub fn delete_employee(&mut self, emp: usize) {
@@ -171,8 +178,9 @@ pub struct Business {
             self.blocks += 1;
             empty_vec.push(vec![0]);
         }
+        let empty_vec_enum = RoleAssigned::MultiAssigned(empty_vec);
         for (_, role) in self.roles.iter_mut() {
-            role.assigned_set(empty_vec.clone());
+            role.assigned_set(empty_vec_enum.clone());
         }
         for (_, employee) in self.employees.iter_mut() {
             if employee.clock_in < self.open {employee.clock_in = self.open.clone()};
@@ -284,9 +292,10 @@ pub trait Role: DynClone + std::fmt::Debug {
     fn name(&self) -> AttrValue;
     fn sort(&self) -> usize;
     fn sort_set(&mut self, sort: usize);
+    fn is_multi(&self) -> bool;
     /// Public for debug purposes only, table of roles will likely not be visible in final product
-    fn assigned(&self) -> Vec<usize>;
-    fn assigned_set(&mut self, assigned: Vec<Vec<usize>>);
+    fn assigned(&self) -> RoleAssigned;
+    fn assigned_set(&mut self, assigned: RoleAssigned);
     fn color(&self) -> AttrValue;
     fn color_set(&mut self, color: String);
     fn is_empty(&self) -> bool;
@@ -318,6 +327,19 @@ impl Ord for Box<dyn Role> {
         self.sort().cmp(&other.sort())
             .then(self.name().cmp(&other.name()))
             .then(self.id().cmp(&other.id()))
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum RoleAssigned {
+    SingleAssinged(Vec<usize>),
+    MultiAssigned(Vec<Vec<usize>>)
+} impl Into<Vec<usize>> for RoleAssigned {
+    fn into(self) -> Vec<usize> {
+        match self {
+            RoleAssigned::SingleAssinged(items) => items,
+            RoleAssigned::MultiAssigned(items) => items.into_iter().flatten().collect(),
+        }
     }
 }
 
@@ -374,15 +396,19 @@ struct SingleRole {
     fn name(&self) -> AttrValue {self.name.clone()}
     fn sort(&self) -> usize {self.sort.clone()}
     fn sort_set(&mut self, sort: usize) {self.sort = sort;}
-    fn assigned(&self) -> Vec<usize> {self.assigned.clone()}
-    fn assigned_set(&mut self, assigned: Vec<Vec<usize>>) {
-        self.assigned = {
-            let flat: Vec<usize> = assigned.clone().into_iter().flatten().collect();
-            if flat.len().eq(&assigned.len()) {
-                flat
-            } else {
-                panic!("Improper init of role! Tried to assign {:#?} to role {}", assigned, self.name);
-            }
+    fn is_multi(&self) -> bool {false}
+    fn assigned(&self) -> RoleAssigned {RoleAssigned::SingleAssinged(self.assigned.clone())}
+    fn assigned_set(&mut self, assigned: RoleAssigned) {
+        self.assigned = match assigned {
+            RoleAssigned::MultiAssigned(items) => {
+                        let flat: Vec<usize> = items.clone().into_iter().flatten().collect();
+                        if flat.len().eq(&items.len()) {
+                            flat
+                        } else {
+                            panic!("Improper init of role! Tried to assign {:#?} to role {}", items, self.name);
+                        }
+                    }
+            RoleAssigned::SingleAssinged(items) => items,
         };
     }
     fn color(&self) -> AttrValue {self.color.clone()}
@@ -467,11 +493,23 @@ struct MultiRole {
     fn sort_set(&mut self, sort: usize) {
         self.sort = sort;
     }
-    fn assigned(&self) -> Vec<usize> {
-        self.assigned.clone().into_iter().flatten().collect()
+    fn is_multi(&self) -> bool {
+        true
     }
-    fn assigned_set(&mut self, assigned: Vec<Vec<usize>>) {
-        self.assigned = assigned;
+    fn assigned(&self) -> RoleAssigned {
+        RoleAssigned::MultiAssigned(self.assigned.clone())
+    }
+    fn assigned_set(&mut self, assigned: RoleAssigned) {
+        self.assigned = match assigned {
+            RoleAssigned::SingleAssinged(items) => {
+                let mut multi_vec = vec![];
+                for item in items {
+                    multi_vec.push(vec![item]);
+                }
+                multi_vec
+            },
+            RoleAssigned::MultiAssigned(items) => items,
+        };
     }
     fn color(&self) -> AttrValue {
         self.color.clone()
@@ -622,6 +660,37 @@ pub struct Employee {
             }
         }
         Ok(())
+    }
+
+    /// Helper function to find the first block where the employee is clocked in, but not currently assigned a role
+    /// 
+    /// Returns None when no such block exists
+    pub fn first_open(&self) -> Option<usize> {
+        for i in 0..self.assigned.len() {
+            if let Some(role) = self.assigned.get(i) {
+                if 1.eq(role) {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn assign_area(&mut self, role: &mut Box<dyn Role>, time_index: usize, preferred_length: usize) {
+        for i in 0..preferred_length {
+            match self.assigned.get(time_index + i) {
+                None => return,
+                Some(curr_role) => {
+                    if 1.eq(curr_role) {
+                        // info!("Assiging role {} ({}) to {} at {}", role.name(), role.id(), self.name, time_index+i);
+                        self.assigned[time_index + i] = role.id();
+                        role.add_block(&self.id, vec![time_index+i]);
+                    } else {
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     pub fn cmp(&self, other: &Employee, order: EmployeeSort) -> std::cmp::Ordering{

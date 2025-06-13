@@ -1,4 +1,3 @@
-use log::{error, info};
 use yew::{prelude::*, virtual_dom::VNode};
 use crate::{data::*, scheduler::blocks::*, BusinessContext};
 
@@ -46,7 +45,10 @@ pub fn Table() -> Html {
         for i in 0..business.blocks {
             role_row.push(html!(
                 <td>
-                    {role.assigned()[i]}
+                    {match role.assigned() {
+                        RoleAssigned::SingleAssinged(items) => items[i].to_string(),
+                        RoleAssigned::MultiAssigned(items) => format!("{:?}",items[i]),
+                    }}
                 </td>
             ));
         }
@@ -63,34 +65,6 @@ pub fn Table() -> Html {
     }
 
     let mut emp_rows = vec![];
-    // let base = "background: #".to_string();
-    // for (_,employee) in business.employees.iter() {
-    //     let mut emp_row: Vec<VNode> = vec![];
-    //     emp_row.push(html!(
-    //         <td>
-    //             {employee.name.clone()}
-    //         </td>
-    //     ));
-    //     for i in 0..business.blocks {
-    //         let color:String = match employee.assigned[i] {
-    //             0 => "AAAAAA".into(), // Not clocked in
-    //             2 => "808080".into(),
-    //             x @ 3.. => business.role_colors[&x].clone().to_string(),
-    //             1 => "FFFFFF".into()
-    //         };
-    //         let style = base.clone() + &color;
-    //         emp_row.push(html!(
-    //             <td style={style}>
-    //                 {employee.assigned[i]}
-    //             </td>
-    //         ));
-    //     }
-    //     emp_rows.push(html!(
-    //         <tr>
-    //             {emp_row}
-    //         </tr>
-    //     ));
-    // }
     for (id,employee) in business.employees.iter() {
         emp_rows.push((id.clone(), employee.make_row(business.clone(), held_block.clone())));
     }
@@ -100,12 +74,16 @@ pub fn Table() -> Html {
         emp_table.push(row);
     }
 
-    html!(<table class={"mui-table mui-table--bordered"}>
-        {table_header.clone()}
-        {role_table}
-        {table_header}
-        {emp_table}
-    </table>)
+    html!(<>
+        <table class={"mui-table mui-table--bordered"}>
+            {table_header.clone()}
+            {role_table}
+        </table>
+        <table class={"mui-table mui-table--bordered"}>
+            {table_header}
+            {emp_table}
+        </table>
+    </>)
 }
 
 impl Employee {
@@ -142,11 +120,8 @@ impl Employee {
                         {static_block(TimeBlock::new_simple(self.id.clone(), i, role), style, business.clone(), held_block.clone())}
                     </td>
                 ));
-            // } else if prev_role == role {
-            //     continue;
             } else {
                 // If assigned, give draggable block
-
                 let mut role_len = 1;
                 let mut role_i = i+1;
                 loop {
@@ -187,25 +162,4 @@ impl Employee {
         )
     }
 }
-
-// fn emp_row(emp: &Employee) -> Html {
-//     let mut row = vec![];
-//     row.push(html!(
-//         <td>
-//             {emp.name.clone()}
-//         </td>
-//     ));
-//     for i in 0..emp.assigned.len() {
-//         row.push(html!(
-//             <td>
-//                 // {emp.assigned[i].clone()}
-//             </td>
-//         ));
-//     }
-//     html!(
-//         <tr key={emp.id}>
-//             {row}
-//         </tr>
-//     )
-// }
 

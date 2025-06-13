@@ -1,5 +1,5 @@
 use chrono::NaiveTime;
-use log::{error, info, warn};
+use log::warn;
 use yew::prelude::*;
 
 use crate::scheduler::{blocks::HeldBlock, TimeBlock};
@@ -17,7 +17,9 @@ pub enum BusinessEvents {
     AssignBlock { employee: usize, role: usize, blocks: Vec<usize> },
     RemoveBlock { employee: usize, blocks: Vec<usize> },
 
-    DragAssignBlock { target_block: TimeBlock, drag_block: TimeBlock, held_block: HeldBlock }
+    DragAssignBlock { target_block: TimeBlock, drag_block: TimeBlock, held_block: HeldBlock },
+
+    ScheduleLunch
 }
 
 impl Reducible for crate::data::Business {
@@ -101,6 +103,7 @@ impl Reducible for crate::data::Business {
                     }
                 }
             }
+            BusinessEvents::ScheduleLunch => business.schedule_lunch(),
         }
         return business.into()
     }

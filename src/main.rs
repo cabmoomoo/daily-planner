@@ -3,12 +3,12 @@
 use std::ops::Deref;
 
 use data::*;
-use log::info;
 use yew::prelude::*;
 use settings::Settings;
 
 use crate::scheduler::{Controls, Table};
 
+mod automation;
 mod data;
 mod events;
 mod settings;

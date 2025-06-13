@@ -3,7 +3,7 @@ use yew::prelude::*;
 
 use crate::{data::*, events::BusinessEvents, BusinessContext};
 
-const DEFAULT_SHIFT: usize = 4;
+pub const DEFAULT_SHIFT: usize = 4;
 
 #[function_component]
 pub fn Settings() -> Html {
