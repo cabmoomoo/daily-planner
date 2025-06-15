@@ -7,7 +7,7 @@ use crate::{events::BusinessEvents, BusinessContext};
 
 pub type HeldBlock = UseStateHandle<TimeBlock>;
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default, Properties)]
 pub struct TimeBlock {
     pub emp_id: usize,
     pub time_index: usize,

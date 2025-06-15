@@ -6,16 +6,18 @@ use data::*;
 use yew::prelude::*;
 use settings::Settings;
 
-use crate::scheduler::{Controls, Table};
+use crate::scheduler::{Controls, ScheduleCopy, Table};
 
 mod automation;
 mod data;
 mod events;
+mod persistence;
 mod settings;
 mod scheduler;
 
 pub type BusinessContext = UseReducerHandle<Business>;
 pub type TabContext = UseStateHandle<Tabs>;
+pub type Sort = UseStateHandle<EmployeeSort>;
 
 #[derive(PartialEq)]
 pub enum Tabs {
@@ -25,10 +27,10 @@ pub enum Tabs {
 
 #[function_component]
 fn App() -> Html {
-    let business = use_reducer(|| Business::sample());
+    let business = use_reducer(|| Business::init());
     let tab = use_state_eq(|| Tabs::Main);
-
-    // info!("{:#?}", business);
+    let sort_table = use_state_eq(|| EmployeeSort::Name);
+    let sort_settings = use_state_eq(|| EmployeeSort::Name);
 
     let mut tab_styles = vec![None, None];
     match tab.deref() {
@@ -36,22 +38,28 @@ fn App() -> Html {
         Tabs::Settings => tab_styles[1] = Some("mui--is-active"),
     }
 
-    html! {<ContextProvider<BusinessContext> context={business}>
+    html! {<ContextProvider<BusinessContext> context={business}> 
         <ContextProvider<TabContext> context={tab.clone()}>
             <TabBar />
         </ContextProvider<TabContext>>
-        <div class={classes!("mui-tabs__pane", tab_styles[0])}>
-            <div class={"pane-content"}>
-                <Table />
-                <br />
-                <Controls />
-                <br />
-
+        <ContextProvider<Sort> context={sort_table}>
+            <div class={classes!("mui-tabs__pane", tab_styles[0])}>
+                <div class={"pane-content"}>
+                    <Table />
+                    <br />
+                    <Controls />
+                    <br />
+                    <ScheduleCopy />
+                </div>
             </div>
-        </div>
-        <div class={classes!("mui-tabs__pane", tab_styles[1])}>
-            <Settings />
-        </div>
+        </ContextProvider<Sort>>
+        <ContextProvider<Sort> context={sort_settings}>
+            <div class={classes!("mui-tabs__pane", tab_styles[1])}>
+                <div class={"pane-content"}>
+                <Settings />
+                </div>
+            </div>
+        </ContextProvider<Sort>>
     </ContextProvider<BusinessContext>>}
 }
 

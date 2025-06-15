@@ -1,6 +1,4 @@
-use log::info;
-
-use crate::data::{Business, Role};
+use crate::data::{Business, Role, RoleTrait};
 
 impl Business {
 
@@ -46,10 +44,10 @@ impl Business {
             }
         }
         let mut curr_employee = 0;
-        let mut roles: Vec<&mut Box<dyn Role>> = self.roles.values_mut().collect();
+        let mut roles: Vec<&mut Role> = self.roles.values_mut().collect();
         roles.sort_by(|a,b| a.sort().cmp(&b.sort()));
         for role in roles {
-            if role.is_multi() {info!("Role {} is a multi", role.name());continue;}
+            if role.is_multi() {continue;}
             let mut assigned: Vec<usize> = role.assigned().into();
             for time_index in 0.. assigned.len() {
                 if assigned[time_index] > 0 {
