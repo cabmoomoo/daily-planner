@@ -5,14 +5,12 @@ edition = "2021"
 
 [dependencies]
 chrono = { version = "0.4.40", features = ["serde"] }
-dyn-clone = "1.0.19"
+enum_dispatch = "0.3.13"
 flate2 = "1.1.2"
 implicit-clone = { version = "0.4.1", features = ["serde"] }
 log = "0.4.27"
 ron = "0.10.1"
 serde = { version = "1.0.219", features = ["derive"] }
-stylist = { version = "0.13.0", features = ["parser"] }
 wasm-logger = "0.2.0"
 web-sys = { version = "0.3.77", features = ["DataTransfer", "Document", "DragEvent", "HtmlInputElement", "HtmlSelectElement", "HtmlTimeElement"] }
 yew = { version = "0.21.0", features = ["csr"] }
-yew-mdc = { git = "https://github.com/dungeonfog/yew-mdc", version = "0.1.0" }

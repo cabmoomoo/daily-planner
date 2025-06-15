@@ -6,6 +6,7 @@
     --empty-block-color: #e0e0e0;
 }
 
+
 .mui-tabs__pane.mui--is-active, .table-key{
     display: flex;
     justify-content: center;
@@ -14,6 +15,7 @@
 .pane-content {
     max-width: 1080px;
 }
+
 
 .mui-table {
     text-align: center;
@@ -24,6 +26,30 @@
     padding: 0;
 }
 
+.mui-table thead tr th {
+    text-align: center;
+}
+
+.button-container {
+    overflow: auto;
+}
+
+.button-container input {
+    margin: 2px;
+}
+
+
+div.controls {
+    display: flex;
+    justify-content: center;
+}
+
+.controls input {
+    margin-left: 5px;
+    margin-right: 5px;
+}
+
+
 .time-block {
     min-width: 40px;
     min-height: 40px;
@@ -32,10 +58,9 @@
     border-width: 1px;
 }
 
-.time-block.multi-block, .table-key-item {
+.time-block.multi-block {
     float: left;
 }
-
 
 .empty-block {
     min-width: 39px;

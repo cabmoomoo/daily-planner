@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
 use chrono::{NaiveTime, TimeDelta};
-use dyn_clone::DynClone;
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 use yew::{AttrValue, Properties};
+
+use crate::persistence::read_settings;
 
 const DEFAULT_COLOR: &'static str = "AAC406";
 
@@ -12,32 +15,41 @@ pub enum BusinessError {
     EmployeeNotFound,
     RoleNotFound,
     EmployeeError(EmployeeError)
+} impl std::fmt::Display for BusinessError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BusinessError::EmployeeNotFound => write!(f, "Employee not found"),
+            BusinessError::RoleNotFound => write!(f, "Role not found"),
+            BusinessError::EmployeeError(employee_error) => write!(f, "{}", employee_error),
+        }
+    }
 }
 
-fn business_base() -> Box<dyn Role> {
-    Box::new(MultiRole::new(2, "Lunch".into(), 0))
+fn business_base() -> Role {
+    Role::MultiRole(MultiRole::new(2, "Lunch".into(), 0))
 }
 
-#[derive(Clone, PartialEq, Properties, Debug)]
+#[derive(Clone, PartialEq, Properties, Debug, Serialize, Deserialize)]
 pub struct Business {
     pub open: NaiveTime,
     pub close: NaiveTime,
-    pub roles: HashMap<usize, Box<dyn Role>>,
+    pub roles: HashMap<usize, Role>,
     pub employees: HashMap<usize, Employee>,
     // In production, blocks and block_size may not need to be public
     pub blocks: usize, // The number of blocks within the current business hours
     pub block_size: TimeDelta, // The size of the schedule's blocks
+    #[serde(skip)]
     pub role_colors: HashMap<usize, AttrValue>
 } impl Business {
     /// Generate a sample business with 3 roles and 4 employees
     pub fn sample() -> Business {
         let open = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
         let close = NaiveTime::from_hms_opt(19, 0, 0).unwrap();
-        let role_vec: Vec<Box<dyn Role>> = vec![
+        let role_vec = vec![
             business_base(),
-            Box::new(SingleRole::new_blank(3, "Primary".into(), "00AAFF".into())),
-            Box::new(SingleRole::new_blank(4, "Backup".into(), "C70039".into())),
-            Box::new(SingleRole::new_blank(5, "Input".into(), "11E000".into()))
+            SingleRole::new_blank(3, "Primary".into(), "00AAFF".into()).into(),
+            SingleRole::new_blank(4, "Backup".into(), "C70039".into()).into(),
+            SingleRole::new_blank(5, "Input".into(), "11E000".into()).into()
         ];
         let mut roles = HashMap::new();
         let mut role_colors = HashMap::new();
@@ -104,11 +116,23 @@ pub struct Business {
             role_colors
         };
         business.update_business_hours(open, close);
-        business.schedule_lunch();
-        business.schedule_roles();
+        // business.schedule_lunch();
+        // business.schedule_roles();
         business
     }
 
+    pub fn init() -> Business {
+        let mut business = match read_settings() {
+            Some(b) => b,
+            None => {return Business::sample();},
+        };
+        for (_, role) in business.roles.iter() {
+            business.role_colors.insert(role.id(), role.color());
+        }
+        business.update_business_hours(business.open, business.close);
+        business
+    }
+    
     pub fn new_role(&mut self, name: AttrValue) {
         let mut id = 2;
         loop {
@@ -118,7 +142,8 @@ pub struct Business {
                 break;
             }
         }
-        self.roles.insert(id.clone(), Box::new(SingleRole::new(id, name, self.blocks)));
+        self.roles.insert(id.clone(), SingleRole::new(id, name, self.blocks).into());
+        self.role_colors.insert(id.clone(), self.roles[&id].color());
     }
     pub fn new_employee(&mut self, name: AttrValue) {
         let mut id = 1;
@@ -186,6 +211,12 @@ pub struct Business {
             if employee.clock_in < self.open {employee.clock_in = self.open.clone()};
             if employee.clock_out > self.close {employee.clock_out = self.close.clone()};
             employee.clear_assigned(&self.open, &self.close, self.block_size.clone());
+        }
+    }
+    pub fn update_role_color(&mut self, role_id: usize, color: AttrValue) {
+        if let Some(role) =  self.roles.get_mut(&role_id) {
+            role.color_set(color.clone());
+            self.role_colors.insert(role_id, color);
         }
     }
     pub fn update_employee_hours(&mut self, id: usize, clock_in: NaiveTime, clock_out: NaiveTime) {
@@ -274,12 +305,13 @@ pub struct Business {
     }
 }
 
-dyn_clone::clone_trait_object!(Role);
-pub trait Role: DynClone + std::fmt::Debug {
-    fn new(id: usize, name: AttrValue, blocks: usize) -> Self where Self: Sized;
-    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized;
-    /// Only to be used when future init of assigned is planned
-    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized;
+// dyn_clone::clone_trait_object!(RoleTrait);
+#[enum_dispatch]
+pub trait RoleTrait: std::fmt::Debug {
+    // fn new(id: usize, name: AttrValue, blocks: usize) -> Self where Self: Sized;
+    // // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized;
+    // /// Only to be used when future init of assigned is planned
+    // fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized;
 
     /// Replaces the employee ID at the given indexes, returning a list of (replaced employee id, at time index)
     fn add_block(&mut self, id: &usize, indexes: Vec<usize>) -> Vec<(usize, usize)>;
@@ -297,16 +329,24 @@ pub trait Role: DynClone + std::fmt::Debug {
     fn assigned(&self) -> RoleAssigned;
     fn assigned_set(&mut self, assigned: RoleAssigned);
     fn color(&self) -> AttrValue;
-    fn color_set(&mut self, color: String);
+    fn color_set(&mut self, color: AttrValue);
     fn is_empty(&self) -> bool;
-} impl dyn Role {
+} impl dyn RoleTrait {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.sort().cmp(&other.sort())
             .then(self.name().cmp(&other.name()))
             .then(self.id().cmp(&other.id()))
     }
 }
-impl PartialEq for Box<dyn Role> {
+
+#[enum_dispatch(RoleTrait)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Role {
+    SingleRole,
+    MultiRole
+}
+
+impl PartialEq for Role {
     fn eq(&self, other: &Self) -> bool {
         // self.0 == other.0 && self.1 == other.1
         self.id() == other.id() &&
@@ -316,13 +356,13 @@ impl PartialEq for Box<dyn Role> {
         self.color() == other.color()
     }
 }
-impl Eq for Box<dyn Role> {}
-impl PartialOrd for Box<dyn Role> {
+impl Eq for Role {}
+impl PartialOrd for Role {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
-impl Ord for Box<dyn Role> {
+impl Ord for Role {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.sort().cmp(&other.sort())
             .then(self.name().cmp(&other.name()))
@@ -343,28 +383,17 @@ pub enum RoleAssigned {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Properties)]
+#[derive(Clone, PartialEq, Debug, Properties, Serialize, Deserialize)]
 struct SingleRole {
     id: usize,
     name: AttrValue,
     sort: usize,
+    #[serde(skip)]
     assigned: Vec<usize>,
     color: AttrValue,
+    #[serde(skip)]
     empty: bool
-} impl Role for SingleRole {
-    fn new(id: usize, name: AttrValue, blocks: usize) -> SingleRole {
-        let mut assigned = vec![];
-        for _ in 0..blocks {
-            assigned.push(0);
-        }
-        SingleRole { id: id.clone(), name: name, sort: id, assigned: assigned, color: DEFAULT_COLOR.into(), empty: true }
-    }
-    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> SingleRole {
-    //     SingleRole { id: id.clone(), name: name, sort: id, assigned: assigned, color: DEFAULT_COLOR.into(), empty: empty }
-    // }
-    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> SingleRole {
-        SingleRole { id: id.clone(), name: name, sort: id, assigned: vec![], color: color, empty: true }
-    }
+} impl RoleTrait for SingleRole {
 
     fn add_block(&mut self, id: &usize, indexes: Vec<usize>) -> Vec<(usize, usize)> {
         let mut replaced_employees = vec![];
@@ -412,38 +441,39 @@ struct SingleRole {
         };
     }
     fn color(&self) -> AttrValue {self.color.clone()}
-    fn color_set(&mut self, color: String) {self.color = color.into();}
+    fn color_set(&mut self, color: AttrValue) {self.color = color;}
     fn is_empty(&self) -> bool {self.empty}
 
     // fn cmp(&self, other: &impl Role) -> std::cmp::Ordering {
     //     self.sort()
     // }
 } impl SingleRole {
-
+    fn new(id: usize, name: AttrValue, blocks: usize) -> SingleRole {
+        let mut assigned = vec![];
+        for _ in 0..blocks {
+            assigned.push(0);
+        }
+        SingleRole { id: id.clone(), name: name, sort: id, assigned: assigned, color: DEFAULT_COLOR.into(), empty: true }
+    }
+    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> SingleRole {
+    //     SingleRole { id: id.clone(), name: name, sort: id, assigned: assigned, color: DEFAULT_COLOR.into(), empty: empty }
+    // }
+    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> SingleRole {
+        SingleRole { id: id.clone(), name: name, sort: id, assigned: vec![], color: color, empty: true }
+    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 struct MultiRole {
     id: usize,
     name: AttrValue,
     sort: usize,
+    #[serde(skip)]
     assigned: Vec<Vec<usize>>,
     color: AttrValue,
+    #[serde(skip)]
     empty: bool
-} impl Role for MultiRole {
-    fn new(id: usize, name: AttrValue, blocks: usize) -> Self where Self: Sized {
-        let mut assigned = vec![];
-        for _ in 0..blocks {
-            assigned.push(vec![0]);
-        }
-        MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty: true }
-    }
-    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized {
-    //     MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty }
-    // }
-    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized {
-        MultiRole { id: id.clone(), name, sort: id, assigned: vec![], color, empty: true }
-    }
+} impl RoleTrait for MultiRole {
 
     fn add_block(&mut self, id: &usize, indexes: Vec<usize>) -> Vec<(usize, usize)> {
         for index in indexes {
@@ -514,11 +544,25 @@ struct MultiRole {
     fn color(&self) -> AttrValue {
         self.color.clone()
     }
-    fn color_set(&mut self, color: String) {
-        self.color = color.into();
+    fn color_set(&mut self, color: AttrValue) {
+        self.color = color;
     }
     fn is_empty(&self) -> bool {
         self.empty
+    }
+} impl MultiRole {
+    fn new(id: usize, name: AttrValue, blocks: usize) -> Self where Self: Sized {
+        let mut assigned = vec![];
+        for _ in 0..blocks {
+            assigned.push(vec![0]);
+        }
+        MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty: true }
+    }
+    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized {
+    //     MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty }
+    // }
+    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized {
+        MultiRole { id: id.clone(), name, sort: id, assigned: vec![], color, empty: true }
     }
 }
 
@@ -528,10 +572,22 @@ struct MultiRole {
 pub enum EmployeeError {
     NotAssignedRole { failed: usize, allowed: Vec<usize> },
     NotClockedIn
-
+} impl std::fmt::Display for EmployeeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmployeeError::NotAssignedRole { failed, allowed } => {
+                write!(f, "Employee not assigned to role {}; can be assigned: ", failed)?;
+                for allowed in allowed {
+                    write!(f, "{},", allowed)?;
+                }
+                write!(f, "")
+            },
+            EmployeeError::NotClockedIn => write!(f, "Employee not clocked in"),
+        }
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone, Copy)]
 pub enum EmployeeSort {
     #[default]
     Name,
@@ -543,7 +599,7 @@ pub enum EmployeeSort {
     Role { id: usize }
 }
 
-#[derive(Clone, PartialEq, Debug, Properties)]
+#[derive(Clone, PartialEq, Debug, Properties, Serialize, Deserialize)]
 pub struct Employee {
     pub id: usize,
     pub name: AttrValue,
@@ -562,6 +618,7 @@ pub struct Employee {
     /// 
     ///     etc = role id
     /// 
+    #[serde(skip)]
     pub assigned: Vec<usize> // Roles an employee is currently assigned to work
 } impl Employee {
     pub fn new(id: usize, name: AttrValue, clock_in: NaiveTime, clock_out: NaiveTime) -> Employee {
@@ -646,6 +703,7 @@ pub struct Employee {
             if role.eq(item) {
                 self.roles.remove(i);
                 failed = false;
+                break;
             }
         }
         if failed {
@@ -676,7 +734,7 @@ pub struct Employee {
         None
     }
 
-    pub fn assign_area(&mut self, role: &mut Box<dyn Role>, time_index: usize, preferred_length: usize) {
+    pub fn assign_area(&mut self, role: &mut Role, time_index: usize, preferred_length: usize) {
         for i in 0..preferred_length {
             match self.assigned.get(time_index + i) {
                 None => return,

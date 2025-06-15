@@ -4,7 +4,7 @@ use chrono::NaiveTime;
 use yew::prelude::*;
 use web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::{events::BusinessEvents, BusinessContext};
+use crate::{data::RoleTrait, events::BusinessEvents, BusinessContext};
 
 #[function_component]
 pub fn Controls() -> Html {
