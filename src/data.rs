@@ -70,7 +70,7 @@ pub struct Business {
                 break;
             }
         }
-        self.employees.insert(id.clone(), Employee::new(id, name, self.open.clone(), self.close.clone()));
+        self.employees.insert(id.clone(), Employee::new(id, name, self.open.clone(), self.close.clone()).new_blank(self.blocks));
     }
     pub fn delete_role(&mut self, role: usize) {
         let role_get = self.roles.remove(&role);
@@ -177,16 +177,14 @@ pub struct Business {
     }
 
     pub fn assign_block(&mut self, employee: usize, role: usize, blocks: Vec<usize>) -> Result<usize> {
-        let emp_get = self.employees.get_mut(&employee);
-        if emp_get.is_none() {
-            return Err(BusinessError::EmployeeNotFound);
-        }
-        let emp = emp_get.unwrap();
-        let role_get = self.roles.get_mut(&role);
-        if role_get.is_none() {
-            return Err(BusinessError::RoleNotFound);
-        }
-        let role = role_get.unwrap();
+        let emp = match self.employees.get_mut(&employee) {
+            Some(emp) => emp,
+            None => return Err(BusinessError::EmployeeNotFound),
+        };
+        let role = match self.roles.get_mut(&role) {
+            Some(x) => x,
+            None => return Err(BusinessError::RoleNotFound),
+        };
         // Assign the block to the target employee
         let mut modified_blocks = 0;
         match emp.assign_block(blocks, role.id()) {
@@ -312,6 +310,19 @@ pub enum RoleAssigned {
         match self {
             RoleAssigned::SingleAssinged(items) => items,
             RoleAssigned::MultiAssigned(items) => items.into_iter().flatten().collect(),
+        }
+    }
+} impl Into<Vec<Vec<usize>>> for RoleAssigned {
+    fn into(self) -> Vec<Vec<usize>> {
+        match self {
+            RoleAssigned::SingleAssinged(items) => {
+                let mut result = Vec::new();
+                for item in items {
+                    result.push(vec![item]);
+                }
+                result
+            },
+            RoleAssigned::MultiAssigned(items) => items,
         }
     }
 }
@@ -568,6 +579,10 @@ pub struct Employee {
     pub fn new(id: usize, name: AttrValue, clock_in: NaiveTime, clock_out: NaiveTime) -> Employee {
         Employee { id: id, name: name, roles: vec![2], scheduled: true, lunch: 2, clock_in, clock_out, assigned: vec![] }
     }
+    pub fn new_blank(mut self, blocks: usize) -> Self {
+        self.assigned = vec![1;blocks];
+        self
+    }
     pub fn clear_assigned(&mut self, open: &NaiveTime, close: &NaiveTime, block_size: TimeDelta) {
         let mut assigned = vec![];
         let mut curr_time = open.clone();
@@ -619,7 +634,7 @@ pub struct Employee {
             if curr == 0 {
                 continue;
             }
-            if curr > 2 { // A role that isn't lunch
+            if curr > 1 { 
                 cleared.push((curr, index));
             }
             self.assigned[index] = 1;
@@ -684,7 +699,6 @@ pub struct Employee {
                 None => return,
                 Some(curr_role) => {
                     if 1.eq(curr_role) {
-                        // info!("Assiging role {} ({}) to {} at {}", role.name(), role.id(), self.name, time_index+i);
                         self.assigned[time_index + i] = role.id();
                         role.add_block(&self.id, vec![time_index+i]);
                     } else {
@@ -696,6 +710,7 @@ pub struct Employee {
     }
 
     pub fn deschedule(&mut self, blocks: usize) {
+        self.scheduled = false;
         self.assigned = vec![0;blocks];
     }
 

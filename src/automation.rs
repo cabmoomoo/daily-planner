@@ -3,10 +3,8 @@ use crate::data::{Business, Role, RoleTrait};
 impl Business {
 
     pub fn schedule_lunch(&mut self) {
-        // Clear the schedule of all but lunch
-        for (_, role) in self.employees.iter_mut() {
-            role.clear_assigned(&self.open, &self.close, self.block_size.clone());
-        }
+        // Reset the schedule
+        self.update_business_hours(self.open, self.close);
 
         let lunch = self.roles.get_mut(&2).unwrap();
 
@@ -60,7 +58,6 @@ impl Business {
                     if curr_employee >= employees.len() {
                         curr_employee = 0;
                     }
-                    // info!("role {}, time index {}, attempt {}, employee {}", role.name(), time_index, _attempt, employees[curr_employee].name);
                     if employees[curr_employee].roles.contains(&role.id()) && employees[curr_employee].assigned[time_index] == 1 {
                         employees[curr_employee].assign_area(role, time_index, crate::settings::DEFAULT_SHIFT);
                         curr_employee += 1;
@@ -70,9 +67,7 @@ impl Business {
                     curr_employee += 1;
                 }
             }
-            // info!("{:#?}", role);
         }
-        // info!("{:#?}", self);
     }
 
 }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext, Sort};
@@ -65,9 +63,9 @@ pub fn Table() -> Html {
         {extra_controls(sort, business)}
         <br />
         <table class={"mui-table mui-table--bordered"}>
-            <thead class="time">
+            // <thead class="time">
                 {table_header}
-            </thead>
+            // </thead>
             {emp_table}
         </table>
     </>)
@@ -142,8 +140,14 @@ fn extra_controls(sort: Sort, business: BusinessContext) -> Html {
 
         <br />
 
-        <input type="button" value="Guess Lunches" onclick={lunch_callback} />
-        <input type="button" value="Fill in Roles" onclick={schedule_callback} />
+        <div class="tooltip" style="border-bottom: none;">
+            <input type="button" value="Guess Lunches" onclick={lunch_callback} />
+            <span class="tooltiptext">{"Clear the current schedule and fill in a lunch block in the middle of every employee's day, appropriately size for that employee"}</span>
+        </div>
+        <div class="tooltip" style="border-bottom: none;">
+            <input type="button" value="Fill in Roles" onclick={schedule_callback} />
+            <span class="tooltiptext">{"For each role, in order of sort, find an available employee and attempt to assign up to 4 blocks to them"}</span>
+        </div>
     </div>)
 }
 

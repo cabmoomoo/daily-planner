@@ -119,3 +119,34 @@ div.controls {
   visibility: visible;
   opacity: 1;
 } 
+
+
+.print-area {
+    display: none;
+}
+
+@media print {
+
+    body {
+        visibility: hidden;
+    }
+
+    .print-area {
+        visibility: visible;
+        display: flex;
+        width: 5in;
+        height: 4in;
+    }
+
+    .print-column {
+        border-right: 1px solid black;
+        padding: 0 5px 0;
+    }
+
+    ul.no-bullets {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+    }
+
+}

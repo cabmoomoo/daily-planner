@@ -102,7 +102,6 @@ impl Reducible for crate::data::Business {
             },
             BusinessEvents::AssignBlock { employee, role, blocks } => {
                 match business.assign_block(employee, role, blocks) {
-                    // Ok(modified) => {info!("Modified {} blocks", modified)},
                     Ok(_) => (),
                     Err(e) => warn!("{:#?}", e)
                 }

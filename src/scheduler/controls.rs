@@ -44,7 +44,6 @@ pub fn Controls() -> Html {
         let (emp_ref, role_ref, time_ref, block_ref) = (emp_ref.clone(), role_ref.clone(), time_ref.clone(), block_ref.clone());
 
         submit = Callback::from(move |_| {
-            // info!("Submit button was pressed!");
             let time = NaiveTime::from_str(&time_ref.cast::<HtmlInputElement>().unwrap().value()).unwrap();
             let blocks_input: usize = block_ref.cast::<HtmlInputElement>().unwrap().value().parse().unwrap();
             let mut curr_time = business.open.clone();
@@ -61,7 +60,6 @@ pub fn Controls() -> Html {
                 blocks.push(i.clone());
                 i += 1
             }
-            // info!("{:#?}", blocks);
             business.dispatch(BusinessEvents::AssignBlock {
                 employee: emp_ref.cast::<HtmlSelectElement>().unwrap().value().parse().unwrap(),
                 role: role_ref.cast::<HtmlSelectElement>().unwrap().value().parse().unwrap(),

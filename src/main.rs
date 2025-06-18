@@ -4,6 +4,7 @@ use std::ops::Deref;
 
 use data::*;
 use yew::prelude::*;
+use print::PrintTable;
 use settings::Settings;
 
 use crate::scheduler::{Controls, ScheduleCopy, Table};
@@ -12,6 +13,7 @@ mod automation;
 mod data;
 mod events;
 mod persistence;
+mod print;
 mod settings;
 mod scheduler;
 
@@ -39,6 +41,7 @@ fn App() -> Html {
     }
 
     html! {<ContextProvider<BusinessContext> context={business}> 
+        <PrintTable />
         <ContextProvider<TabContext> context={tab.clone()}>
             <TabBar />
         </ContextProvider<TabContext>>

@@ -1,5 +1,5 @@
 use log::warn;
-use web_sys::HtmlInputElement;
+use web_sys::{wasm_bindgen::convert::OptionIntoWasmAbi, HtmlInputElement};
 use yew::prelude::*;
 
 use crate::{data::*, events::BusinessEvents, BusinessContext};
@@ -192,10 +192,22 @@ fn RoleNew() -> Html {
         let name = name_ref.clone();
         onclick = Callback::from(move |_| b.dispatch(BusinessEvents::NewRole { name: name.cast::<HtmlInputElement>().unwrap().value().into() }));
     }
+    let onkeydown;
+    {
+        let b = business.clone();
+        let name = name_ref.clone();
+        onkeydown = Callback::from(move |e: KeyboardEvent| {
+            if e.key().eq("Enter") {
+                let name = name.cast::<HtmlInputElement>().unwrap();
+                b.dispatch(BusinessEvents::NewRole { name: name.value().into() });
+                name.set_value("");
+            }
+        });
+    }
 
     html!(<tr key={"RoleNew"}>
         <td>
-            <input ref={name_ref} />
+            <input ref={name_ref} onkeydown={onkeydown} />
             <input type="button" value='\u{1F5F8}' onclick={onclick} />
         </td>
     </tr>)
@@ -273,19 +285,20 @@ fn EmpRow(props: &EmpProp) -> Html {
             <input id="lunch_time" type="number" name="lunch_time" min={0} value={lunch.num_minutes().to_string()} onblur={lunch_cb} ref={lunch_ref} />
         </td>
     </>));
-    let mut roles_list: Vec<&usize> = business.roles.keys().collect();
+    let mut roles_list: Vec<&Role> = business.roles.values().collect();
     roles_list.sort();
-    for id in roles_list {
-        if 2.eq(id) {
+    for role in roles_list {
+        let id = role.id();
+        if 2.eq(&id) {
             continue;
         }
         let box_id = emp.id.to_string() + "/" + &id.to_string();
         let b2 = business.clone();
-        let change_event = BusinessEvents::ToggleEmployeeRole { employee: emp.id.clone(), role: *id };
+        let change_event = BusinessEvents::ToggleEmployeeRole { employee: emp.id.clone(), role: id.clone() };
         let cb = {move |_| b2.dispatch(change_event.clone())};
         emp_row.push(html!(
             <td>
-                <input type="checkbox" name={box_id.clone()} id={box_id.clone()} value={id.to_string()} checked={emp.roles.contains(id)} onchange={cb}/>
+                <input type="checkbox" name={box_id.clone()} id={box_id.clone()} value={id.to_string()} checked={emp.roles.contains(&id)} onchange={cb}/>
                 // <label for={box_id}>{role.name.clone()}</label>
             </td>
         ));
@@ -319,11 +332,23 @@ fn EmpNew() -> Html {
         let name = name_ref.clone();
         onclick = Callback::from(move |_| b.dispatch(BusinessEvents::NewEmployee { name: name.cast::<HtmlInputElement>().unwrap().value().into() }))
     }
+    let onkeydown;
+    {
+        let b = business.clone();
+        let name = name_ref.clone();
+        onkeydown = Callback::from(move |e: KeyboardEvent| {
+            if e.key().eq("Enter") {
+                let name = name.cast::<HtmlInputElement>().unwrap();
+                b.dispatch(BusinessEvents::NewEmployee { name: name.value().into() });
+                name.set_value("");
+            }
+        })
+    }
 
     html!(<tr key={"EmpNew"}>
         <td></td>
         <td>
-            <input ref={name_ref} />
+            <input ref={name_ref} onkeydown={onkeydown}/>
             <input type="button" value='\u{1F5F8}' onclick={onclick} />
         </td>
         // <td>

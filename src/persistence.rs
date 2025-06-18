@@ -117,17 +117,37 @@ pub fn schedule_to_csv(business: BusinessContext) -> String {
     let mut result = String::new();
     for employee in business.employees.values() {
         result += &(employee.id.to_string() + SEPERATOR);
-        result += &(employee.clock_in.to_string() + SEPERATOR);
-        result += &(employee.clock_out.to_string() + SEPERATOR);
-        for time_index in employee.assigned.iter() {
-            result += &(time_index.to_string() + SEPERATOR);
+        if employee.scheduled {
+            result += &(employee.clock_in.to_string() + SEPERATOR);
+            result += &(employee.clock_out.to_string() + SEPERATOR);
+            for time_index in employee.assigned.iter() {
+                result += &(time_index.to_string() + SEPERATOR);
+            }
+        } else {
+            result += &("false".to_string() + SEPERATOR)
         }
         result += NEWLINE;
     }
     result
 }
 
-pub fn csv_to_schedule(csv: String) -> core::result::Result<HashMap<usize, (NaiveTime, NaiveTime, Vec<usize>)>, ParseError> {
+pub enum Schedule {
+    True((NaiveTime,NaiveTime,Vec<usize>)),
+    False
+} impl From<(NaiveTime,NaiveTime,Vec<usize>)> for Schedule {
+    fn from(value: (NaiveTime,NaiveTime,Vec<usize>)) -> Self {
+        Self::True(value)
+    }
+} impl Schedule {
+    pub fn decompose(self) -> Option<(NaiveTime, NaiveTime, Vec<usize>)> {
+        match self {
+            Schedule::True(x) => Some(x),
+            Schedule::False => None,
+        }
+    }
+}
+
+pub fn csv_to_schedule(csv: String) -> core::result::Result<HashMap<usize, Schedule>, ParseError> {
     let mut result = HashMap::new();
     for line in csv.split(&(SEPERATOR.to_string() + NEWLINE)) {
         if line.is_empty() {
@@ -135,13 +155,18 @@ pub fn csv_to_schedule(csv: String) -> core::result::Result<HashMap<usize, (Naiv
         }
         let mut parts = line.split(SEPERATOR);
         let id: usize = parts.next().unwrap().parse()?;
-        let clock_in: NaiveTime = parts.next().unwrap().parse()?;
+        let part2 = parts.next().unwrap();
+        if part2.eq("false") {
+            result.insert(id, Schedule::False);
+            continue;
+        }
+        let clock_in: NaiveTime = part2.parse()?;
         let clock_out: NaiveTime = parts.next().unwrap().parse()?;
         let mut assigned = vec![];
         for time in parts {
             assigned.push(time.parse::<usize>()?);
         }
-        result.insert(id, (clock_in, clock_out, assigned));
+        result.insert(id, (clock_in, clock_out, assigned).into());
     }
     Ok(result)
 }
@@ -153,11 +178,15 @@ impl Business {
             Ok(schedule) => {
                 self.roles.values_mut().for_each(|role| role.blank_out(self.blocks));
                 self.employees.values_mut().for_each(|emp| emp.deschedule(self.blocks));
-                for (emp_id, (clock_in, clock_out, assigned)) in schedule {
+                for (emp_id, scheduled) in schedule {
                     let emp_get = self.employees.get_mut(&emp_id);
                     let employee = match emp_get {
                         Some(e) => e,
                         None => {log::warn!("Attempted to load schedule for invalid employee id: {}", emp_id); continue;},
+                    };
+                    let (clock_in, clock_out, assigned) = match scheduled.decompose() {
+                        Some(x) => x,
+                        None => continue,
                     };
                     if employee.assigned.len() != assigned.len() {
                         log::warn!("Employee {} schedule is incorrect length; expected: {} recieved: {}", emp_id, employee.assigned.len(), assigned.len());
@@ -169,12 +198,22 @@ impl Business {
                     let mut new_roles: HashMap<usize, Vec<usize>> = HashMap::new();
                     for i in 0..assigned.len() {
                         let role_id = assigned[i];
+                        employee.assigned[i] = 1;
                         let curr_role = new_roles.get_mut(&role_id);
                         match curr_role {
                             Some(role) => role.push(i),
                             None => {new_roles.insert(role_id, vec![i]);}
                         }
                     }
+                    match new_roles.remove(&0) {
+                        Some(indexes) => {
+                            for index in indexes {
+                                employee.assigned[index] = 0;
+                            }
+                        },
+                        None => {},
+                    }
+                    let _ = new_roles.remove(&1);
                     for (role_id, new_blocks) in new_roles {
                         if let Err(e) = self.assign_block(emp_id, role_id, new_blocks) {
                             log::warn!("Failed to assign role {} for employee {}; {}", role_id, emp_id, e);
