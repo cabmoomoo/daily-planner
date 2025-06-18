@@ -1,3 +1,4 @@
+use log::warn;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
@@ -34,6 +35,8 @@ pub fn Settings() -> Html {
     }
 
     let mut header_row = vec![];
+    let mut lunch_header_text = "Lunch ".to_string();
+    lunch_header_text.push('\u{24D8}');
     header_row.push(html!(<>
         <th>
             {"Scheduled"}
@@ -47,14 +50,25 @@ pub fn Settings() -> Html {
         <th>
             {"Clock-out"}
         </th>
+        <th>
+            <div class="tooltip">
+                {lunch_header_text}
+                <span class="tooltiptext">{"Duration of employee lunch in minutes (will be rounded to nearest 30)"}</span>
+            </div>
+        </th>
     </>));
     for role in roles_list {
+        if role.id() == 2 {
+            continue;
+        }
         header_row.push(html!(
             <th>
                 {business.roles[&role.id()].name()}
             </th>
         ));
     }
+    let mut multi_role_text = "Multi-Role ".to_string();
+    multi_role_text.push('\u{24D8}');
 
     html!(<>
         <table class={classes!("mui-table","mui-table--bordered")}>
@@ -63,6 +77,13 @@ pub fn Settings() -> Html {
                     <th>{"Role"}</th>
                     <th>{"Priority"}</th>
                     <th>{"Color"}</th>
+                    <th>
+                        <div class="tooltip">
+                            {multi_role_text}
+                            <span class="tooltiptext">{"A multi-role is a role which can have multiple employees assigned in a given time block. The default single-role enforces a maximum of one employee assigned in any given time block."}</span>
+                        </div>
+
+                    </th>
                 </tr>
             </thead>
             <ContextProvider<Vec<usize>> context={role_sorts}>
@@ -84,42 +105,28 @@ pub fn Settings() -> Html {
     </>)
 }
 
-// #[derive(Properties, PartialEq)]
-// #[derive(Properties, PartialEq)]
-// struct RoleProp {
-//     role: impl Role
-// }
-
-// #[function_component]
-// fn RoleRow(props: &RoleProp) -> Html {
-
-//     html!(
-
-//     )
-// }
-
 #[derive(Properties, PartialEq)]
 struct RoleRowProps {
     role_id: usize
 }
 
 #[function_component]
-// fn role_row(role_id: usize, business: BusinessContext, role_sorts: &Vec<usize>) -> Html {
 fn RoleRow(props: &RoleRowProps) -> Html {
     let business = use_context::<BusinessContext>().expect("No context found");
     let role_sorts = use_context::<Vec<usize>>().expect("No sorts context found");
     let role_id = props.role_id;
     let role = business.roles.get(&role_id).expect("It should not be possible to pass an invalid role id at this point");
+    let sort = role.sort();
 
     let mut buttons = vec![];
-    if role.sort().ne(role_sorts.first().unwrap()) && role.id() != 2 {
+    if sort.ne(role_sorts.first().unwrap_or(&sort)) && role.id() != 2 {
         let b = business.clone();
         let onclick = Callback::from(move |_| b.dispatch(BusinessEvents::UpdateRoleSort { role_id: role_id.clone(), increase_priority: true }));
         buttons.push(html!(
             <input type="button" value='\u{2191}' onclick={onclick}/>
         ));
     }
-    if role.sort().ne(role_sorts.last().unwrap()) && role.id() != 2 {
+    if sort.ne(role_sorts.last().unwrap_or(&sort)) && role.id() != 2 {
         let b = business.clone();
         let onclick = Callback::from(move |_| b.dispatch(BusinessEvents::UpdateRoleSort { role_id: role_id.clone(), increase_priority: false }));
         buttons.push(html!(
@@ -148,6 +155,12 @@ fn RoleRow(props: &RoleRowProps) -> Html {
         color_blur = Callback::from(move |_| b2.dispatch(BusinessEvents::UpdateRoleColor { role_id: role_id, color: cn2.cast::<HtmlInputElement>().unwrap().value()}))
     }
 
+    let multi_cb = {
+        let b = business.clone();
+        let role_id = role.id();
+        move |_| {b.dispatch(BusinessEvents::ToggleRoleMulti { role_id: role_id });}
+    };
+
     html!(<tr key={role_id}>
         <td>
             {role.name()}
@@ -156,7 +169,10 @@ fn RoleRow(props: &RoleRowProps) -> Html {
             {role.sort()}
         </td>
         <td>
-            <input value={role.color()} onkeyup={color_onkeyup} onblur={color_blur} ref={color_node}/>
+            <input type="color" value={role.color()} onkeyup={color_onkeyup} onblur={color_blur} ref={color_node} />
+        </td>
+        <td>
+            <input type="checkbox" id="scheduled" name={role.name().to_string() + "Multi"} value={role.id().to_string()} checked={role.is_multi()} onchange={multi_cb} disabled={role_id == 2} />
         </td>
         <td>
             {buttons}
@@ -177,7 +193,7 @@ fn RoleNew() -> Html {
         onclick = Callback::from(move |_| b.dispatch(BusinessEvents::NewRole { name: name.cast::<HtmlInputElement>().unwrap().value().into() }));
     }
 
-    html!(<tr>
+    html!(<tr key={"RoleNew"}>
         <td>
             <input ref={name_ref} />
             <input type="button" value='\u{1F5F8}' onclick={onclick} />
@@ -195,7 +211,7 @@ fn EmpRow(props: &EmpProp) -> Html {
     let business = use_context::<BusinessContext>().expect("No ctx found");
     let emp = &props.emp;
     let mut emp_row = vec![];
-    let (clock_in_ref, clock_out_ref) = (use_node_ref(), use_node_ref());
+    let (clock_in_ref, clock_out_ref, lunch_ref) = (use_node_ref(), use_node_ref(), use_node_ref());
     // let b2 = business.clone();
     let scheduled_cb = {
         let b2 = business.clone(); 
@@ -212,6 +228,34 @@ fn EmpRow(props: &EmpProp) -> Html {
             clock_out: clock_out_ref.cast::<HtmlInputElement>().unwrap().value()
         })
     };
+    let lunch = business.block_size.checked_mul(emp.lunch.try_into().unwrap()).unwrap();
+    let lunch_cb = {
+        let b = business.clone();
+        let emp_id = emp.id.clone();
+        let block_mins = b.block_size.num_minutes();
+        let curr_lunch_mins = lunch.num_minutes();
+        let lunch_ref = lunch_ref.clone();
+        move |_| {
+            let lunch_node = lunch_ref.cast::<HtmlInputElement>().unwrap();
+            let input: i64 = match lunch_node.value().parse() {
+                Ok(num) => num,
+                Err(e) => {
+                    warn!("Could not parse input lunch as number; {}", e);
+                    lunch_node.set_value(&curr_lunch_mins.to_string());
+                    return;
+                }
+            };
+            let mut full_blocks = input / block_mins;
+            let remainder = input % block_mins;
+            if remainder > 0 {
+                let block_half = b.block_size.checked_div(2).unwrap().num_minutes();
+                if remainder > block_half {
+                    full_blocks += 1;
+                }
+            }
+            b.dispatch(BusinessEvents::UpdateEmployeeLunch { emp_id: emp_id, blocks: full_blocks.try_into().unwrap() });
+        }
+    };
     emp_row.push(html!(<>
         <td>
             <input id="scheduled" type="checkbox" name={emp.name.to_string() + "Scheduled"} value={emp.id.to_string()} checked={emp.scheduled} onchange={scheduled_cb}/>
@@ -220,15 +264,21 @@ fn EmpRow(props: &EmpProp) -> Html {
             {emp.name.clone()}
         </td>
         <td>
-            <input id="clock_in" type="time" name="clock_in" step="1800" min={business.open.format("%H:%M").to_string()} max={business.close.format("%H:%M").to_string()} value={emp.clock_in.format("%H:%M").to_string()} ref={clock_in_ref} onblur={clock_cb.clone()} />
+            <input id="clock_in" type="time" name="clock_in" step="1800" min={business.open.format("%H:%M").to_string()} max={business.close.format("%H:%M").to_string()} value={emp.clock_in.format("%H:%M").to_string()} ref={clock_in_ref} onblur={clock_cb.clone()} disabled={!emp.scheduled} />
         </td>
         <td>
-            <input id="clock_out" type="time" name="clock_out" step="1800" min={business.open.format("%H:%M").to_string()} max={business.close.format("%H:%M").to_string()} value={emp.clock_out.format("%H:%M").to_string()} ref={clock_out_ref} onblur={clock_cb.clone()} />
+            <input id="clock_out" type="time" name="clock_out" step="1800" min={business.open.format("%H:%M").to_string()} max={business.close.format("%H:%M").to_string()} value={emp.clock_out.format("%H:%M").to_string()} ref={clock_out_ref} onblur={clock_cb.clone()} disabled={!emp.scheduled} />
+        </td>
+        <td>
+            <input id="lunch_time" type="number" name="lunch_time" min={0} value={lunch.num_minutes().to_string()} onblur={lunch_cb} ref={lunch_ref} />
         </td>
     </>));
     let mut roles_list: Vec<&usize> = business.roles.keys().collect();
     roles_list.sort();
     for id in roles_list {
+        if 2.eq(id) {
+            continue;
+        }
         let box_id = emp.id.to_string() + "/" + &id.to_string();
         let b2 = business.clone();
         let change_event = BusinessEvents::ToggleEmployeeRole { employee: emp.id.clone(), role: *id };
@@ -270,7 +320,7 @@ fn EmpNew() -> Html {
         onclick = Callback::from(move |_| b.dispatch(BusinessEvents::NewEmployee { name: name.cast::<HtmlInputElement>().unwrap().value().into() }))
     }
 
-    html!(<tr>
+    html!(<tr key={"EmpNew"}>
         <td></td>
         <td>
             <input ref={name_ref} />

@@ -7,7 +7,7 @@ use yew::{AttrValue, Properties};
 
 use crate::persistence::read_settings;
 
-const DEFAULT_COLOR: &'static str = "AAC406";
+const DEFAULT_COLOR: &'static str = "#AAC406";
 
 pub type Result<T> = std::result::Result<T, BusinessError>;
 #[derive(Debug)]
@@ -25,10 +25,6 @@ pub enum BusinessError {
     }
 }
 
-fn business_base() -> Role {
-    Role::MultiRole(MultiRole::new(2, "Lunch".into(), 0))
-}
-
 #[derive(Clone, PartialEq, Properties, Debug, Serialize, Deserialize)]
 pub struct Business {
     pub open: NaiveTime,
@@ -41,86 +37,6 @@ pub struct Business {
     #[serde(skip)]
     pub role_colors: HashMap<usize, AttrValue>
 } impl Business {
-    /// Generate a sample business with 3 roles and 4 employees
-    pub fn sample() -> Business {
-        let open = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
-        let close = NaiveTime::from_hms_opt(19, 0, 0).unwrap();
-        let role_vec = vec![
-            business_base(),
-            SingleRole::new_blank(3, "Primary".into(), "00AAFF".into()).into(),
-            SingleRole::new_blank(4, "Backup".into(), "C70039".into()).into(),
-            SingleRole::new_blank(5, "Input".into(), "11E000".into()).into()
-        ];
-        let mut roles = HashMap::new();
-        let mut role_colors = HashMap::new();
-        for role in role_vec {
-            role_colors.insert(role.id(), role.color());
-            roles.insert(role.id(), role);
-        }
-
-
-        let employee_vec = vec![
-            Employee { 
-                id: 1, 
-                name: "Caleb".into(), 
-                roles: vec![2,3,4],
-                scheduled: true,
-                lunch: 2, 
-                clock_in: open.clone(),
-                clock_out: close.clone(),
-                assigned: vec![]
-            },
-            Employee { 
-                id: 2, 
-                name: "Sherri".into(), 
-                roles: vec![2,3,4,5],
-                scheduled: true,
-                lunch: 1, 
-                clock_in: open.clone(),
-                clock_out: close.clone(),
-                assigned: vec![]
-            },
-            Employee { 
-                id: 3, 
-                name: "Brooke".into(), 
-                roles: vec![2,3,4,5],
-                scheduled: true,
-                lunch: 2, 
-                clock_in: open.clone(),
-                clock_out: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
-                assigned: vec![]
-            },
-            Employee { 
-                id: 4, 
-                name: "Jennifer".into(), 
-                roles: vec![2,3,4,5],
-                scheduled: true,
-                lunch: 2, 
-                clock_in: NaiveTime::from_hms_opt(11, 0, 0).unwrap(),
-                clock_out: close.clone(),
-                assigned: vec![]
-            },
-        ];
-        let mut employees = HashMap::new();
-        for employee in employee_vec {
-            employees.insert(employee.id.clone(), employee);
-        }
-
-        let mut business = Business { 
-            open, 
-            close, 
-            roles, 
-            employees,
-            blocks: 0,
-            block_size: TimeDelta::minutes(30),
-            role_colors
-        };
-        business.update_business_hours(open, close);
-        // business.schedule_lunch();
-        // business.schedule_roles();
-        business
-    }
-
     pub fn init() -> Business {
         let mut business = match read_settings() {
             Some(b) => b,
@@ -209,7 +125,7 @@ pub struct Business {
         }
         for (_, employee) in self.employees.iter_mut() {
             if employee.clock_in < self.open {employee.clock_in = self.open.clone()};
-            if employee.clock_out > self.close {employee.clock_out = self.close.clone()};
+            if employee.clock_out > self.close || employee.clock_out < self.open {employee.clock_out = self.close.clone()};
             employee.clear_assigned(&self.open, &self.close, self.block_size.clone());
         }
     }
@@ -218,6 +134,21 @@ pub struct Business {
             role.color_set(color.clone());
             self.role_colors.insert(role_id, color);
         }
+    }
+    pub fn toggle_role_multi(&mut self, role_id: usize) {
+        let role = match self.roles.remove(&role_id) {
+            Some(x) => x,
+            None => return,
+        };
+        let new_role = match role {
+            Role::SingleRole(single_role) => {
+                MultiRole::new(single_role.id(), single_role.name(), self.blocks).into()
+            },
+            Role::MultiRole(multi_role) => {
+                SingleRole::new(multi_role.id(), multi_role.name(), self.blocks).into()
+            },
+        };
+        self.roles.insert(role_id, new_role);
     }
     pub fn update_employee_hours(&mut self, id: usize, clock_in: NaiveTime, clock_out: NaiveTime) {
         let employee = self.employees.get_mut(&id).unwrap();
@@ -331,6 +262,8 @@ pub trait RoleTrait: std::fmt::Debug {
     fn color(&self) -> AttrValue;
     fn color_set(&mut self, color: AttrValue);
     fn is_empty(&self) -> bool;
+
+    fn blank_out(&mut self, blocks: usize);
 } impl dyn RoleTrait {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.sort().cmp(&other.sort())
@@ -444,9 +377,9 @@ struct SingleRole {
     fn color_set(&mut self, color: AttrValue) {self.color = color;}
     fn is_empty(&self) -> bool {self.empty}
 
-    // fn cmp(&self, other: &impl Role) -> std::cmp::Ordering {
-    //     self.sort()
-    // }
+    fn blank_out(&mut self, blocks: usize) {
+        self.assigned = vec![0;blocks];
+    }
 } impl SingleRole {
     fn new(id: usize, name: AttrValue, blocks: usize) -> SingleRole {
         let mut assigned = vec![];
@@ -550,11 +483,19 @@ struct MultiRole {
     fn is_empty(&self) -> bool {
         self.empty
     }
+
+    fn blank_out(&mut self,blocks:usize) {
+        let mut assigned = Vec::new();
+        for _ in 0..blocks {
+            assigned.push(Vec::new());
+        }
+        self.assigned = assigned;
+    }
 } impl MultiRole {
     fn new(id: usize, name: AttrValue, blocks: usize) -> Self where Self: Sized {
         let mut assigned = vec![];
         for _ in 0..blocks {
-            assigned.push(vec![0]);
+            assigned.push(vec![]);
         }
         MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty: true }
     }
@@ -604,9 +545,12 @@ pub struct Employee {
     pub id: usize,
     pub name: AttrValue,
     pub roles: Vec<usize>, // Roles an employee can be assigned to
+    #[serde(skip)]
     pub scheduled: bool,
     pub lunch: usize, // Length of lunch break in 30-minute intervals (1 hour is 2)
+    #[serde(skip)]
     pub clock_in: NaiveTime,
+    #[serde(skip)]
     pub clock_out: NaiveTime,
     ///```assigned = vec![0,0, 1, 1, 2, 2, 1, 0]```
     /// 
@@ -751,6 +695,10 @@ pub struct Employee {
         }
     }
 
+    pub fn deschedule(&mut self, blocks: usize) {
+        self.assigned = vec![0;blocks];
+    }
+
     pub fn cmp(&self, other: &Employee, order: EmployeeSort) -> std::cmp::Ordering{
         self.scheduled.cmp(&other.scheduled).reverse() // true > false, but we want scheduled employees first
         .then(match order {
@@ -772,5 +720,101 @@ pub struct Employee {
             EmployeeSort::Role { id } => self.roles.contains(&id).cmp(&other.roles.contains(&id)),
         }).then(self.name.cmp(&other.name))
         .then(self.id.cmp(&other.id))
+    }
+}
+
+
+fn business_base() -> Role {
+    Role::MultiRole(MultiRole::new(2, "Lunch".into(), 0))
+}
+
+impl Business {
+    /// Generate a sample business with 3 roles and 4 employees
+    pub fn sample() -> Business {
+        let open = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
+        let close = NaiveTime::from_hms_opt(19, 0, 0).unwrap();
+        let role_vec = vec![
+            business_base(),
+            SingleRole::new_blank(3, "Role 1".into(), "#00AAFF".into()).into(),
+            SingleRole::new_blank(4, "Role 2".into(), "#C70039".into()).into(),
+            SingleRole::new_blank(5, "Role 3".into(), "#11E000".into()).into()
+        ];
+        let mut roles = HashMap::new();
+        let mut role_colors = HashMap::new();
+        for role in role_vec {
+            role_colors.insert(role.id(), role.color());
+            roles.insert(role.id(), role);
+        }
+
+        let employee_vec = vec![
+            Employee { 
+                id: 1, 
+                name: "Employee 1".into(), 
+                roles: vec![2,3,4],
+                scheduled: true,
+                lunch: 2, 
+                clock_in: open.clone(),
+                clock_out: close.clone(),
+                assigned: vec![]
+            },
+            Employee { 
+                id: 2, 
+                name: "Employee 2".into(), 
+                roles: vec![2,3,4,5],
+                scheduled: true,
+                lunch: 1, 
+                clock_in: open.clone(),
+                clock_out: close.clone(),
+                assigned: vec![]
+            },
+            Employee { 
+                id: 3, 
+                name: "Employee 3".into(), 
+                roles: vec![2,3,4,5],
+                scheduled: true,
+                lunch: 2, 
+                clock_in: open.clone(),
+                clock_out: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+                assigned: vec![]
+            },
+            Employee { 
+                id: 4, 
+                name: "Employee 4".into(), 
+                roles: vec![2,3,4,5],
+                scheduled: true,
+                lunch: 2, 
+                clock_in: NaiveTime::from_hms_opt(11, 0, 0).unwrap(),
+                clock_out: close.clone(),
+                assigned: vec![]
+            },
+            Employee { 
+                id: 5, 
+                name: "Employee 5".into(), 
+                roles: vec![2,3,4,5],
+                scheduled: false,
+                lunch: 2, 
+                clock_in: open.clone(),
+                clock_out: close.clone(),
+                assigned: vec![]
+            },
+        ];
+        let mut employees = HashMap::new();
+        for employee in employee_vec {
+            employees.insert(employee.id.clone(), employee);
+        }
+
+        let mut business = Business { 
+            open, 
+            close, 
+            roles, 
+            employees,
+            blocks: 0,
+            block_size: TimeDelta::minutes(30),
+            role_colors
+        };
+        business.update_business_hours(open, close);
+        // business.schedule_lunch();
+        // business.schedule_roles();
+        business
     }
 }

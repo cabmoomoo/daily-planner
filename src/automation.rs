@@ -23,11 +23,14 @@ impl Business {
             }
             let mut lunch_indexes = vec![];
             let mut i = 0;
+            let (mut over, mut under) = (0, 1);
             while i < emp.lunch {
                 if i % 2 == 0 {
-                    lunch_indexes.push(index + i);
+                    lunch_indexes.push((index + over).clamp(index, self.blocks));
+                    over += 1;
                 } else {
-                    lunch_indexes.push((index - i).clamp(0, index));
+                    lunch_indexes.push((index - under).clamp(0, index));
+                    under += 1;
                 }
                 i += 1;
             }

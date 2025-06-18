@@ -13,8 +13,10 @@ pub enum BusinessEvents {
     UpdateBusinessHours { open: NaiveTime, close: NaiveTime },
     UpdateRoleSort { role_id: usize, increase_priority: bool },
     UpdateRoleColor { role_id: usize, color: String },
+    ToggleRoleMulti { role_id: usize },
     UpdateEmployeeHours { employee: usize, clock_in: String, clock_out: String },
     ToggleEmployeeScheduled { employee: usize },
+    UpdateEmployeeLunch { emp_id: usize, blocks: usize },
     ToggleEmployeeRole { employee: usize, role: usize },
     AssignBlock { employee: usize, role: usize, blocks: Vec<usize> },
     RemoveBlock { employee: usize, blocks: Vec<usize> },
@@ -43,31 +45,48 @@ impl Reducible for crate::data::Business {
                 //     None => return business.into()
                 // };
                 let curr_sort = business.roles[&role_id].sort();
-                let mut op_role = None;
+                let mut best_swap_role: Option<&mut crate::data::Role> = None;
                 for role in business.roles.values_mut() {
                     if increase_priority {
-                        if curr_sort > role.sort() {
-                            op_role = Some(role);
-                            break;
+                        if let Some(curr_best) = best_swap_role {
+                            if role.id() > curr_best.id() && curr_sort > role.sort() {
+                                best_swap_role = Some(role);
+                            } else {
+                                best_swap_role = Some(curr_best)
+                            }
+                        } else if curr_sort > role.sort() {
+                            best_swap_role = Some(role);
                         }
                     } else {
-                        if curr_sort < role.sort() {
-                            op_role = Some(role);
-                            break;
+                        if let Some(curr_best) = best_swap_role {
+                            if role.id() < curr_best.id() && curr_sort < role.sort() {
+                                best_swap_role = Some(role);
+                            } else {
+                                best_swap_role = Some(curr_best)
+                            }
+                        } else if curr_sort < role.sort() {
+                            best_swap_role = Some(role);
                         }
                     }
                 }
-                if let Some(op_role) = op_role {
+                if let Some(op_role) = best_swap_role {
                     let new_sort = op_role.sort();
                     op_role.sort_set(curr_sort);
                     business.roles.get_mut(&role_id).unwrap().sort_set(new_sort);
                 }
             },
             BusinessEvents::UpdateRoleColor { role_id, color } => business.update_role_color(role_id, color.into()),
+            BusinessEvents::ToggleRoleMulti { role_id } => business.toggle_role_multi(role_id),
             BusinessEvents::UpdateEmployeeHours { employee, clock_in, clock_out } => {
                 business.update_employee_hours(employee, clock_in.parse().unwrap(), clock_out.parse().unwrap());
-                },
+            },
             BusinessEvents::ToggleEmployeeScheduled { employee } => business.toggle_employee_scheduled(employee),
+            BusinessEvents::UpdateEmployeeLunch { emp_id, blocks } => {
+                match business.employees.get_mut(&emp_id) {
+                    Some(emp) => {emp.lunch = blocks},
+                    None => {},
+                }
+            }
             BusinessEvents::ToggleEmployeeRole { employee, role } => {
                 let emp_get = business.employees.get(&employee);
                 if let Some(emp) = emp_get {

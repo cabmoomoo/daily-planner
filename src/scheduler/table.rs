@@ -1,8 +1,8 @@
-use std::{collections::HashMap, num::ParseIntError};
+use std::collections::HashMap;
 
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
-use crate::{data::*, events::BusinessEvents, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext, Sort};
+use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext, Sort};
 
 fn table_header(business: UseReducerHandle<Business>) -> Html {
     let mut table_header = vec![];
@@ -49,6 +49,11 @@ pub fn Table() -> Html {
     for (_, row) in emp_rows {
         emp_table.push(row);
     }
+    if emp_table.is_empty() {
+        emp_table.push(html!(<tr>
+            <td colspan={(business.blocks + 1).to_string()} rowspan="3">{"No scheduled employees found!"}</td>
+        </tr>));
+    }
 
     html!(<>
         // <table class={"mui-table mui-table--bordered"}>
@@ -60,7 +65,9 @@ pub fn Table() -> Html {
         {extra_controls(sort, business)}
         <br />
         <table class={"mui-table mui-table--bordered"}>
-            {table_header}
+            <thead class="time">
+                {table_header}
+            </thead>
             {emp_table}
         </table>
     </>)
@@ -83,7 +90,7 @@ fn table_key(business: BusinessContext, held_block: HeldBlock, sort: Sort) -> Ht
         };
         let mut style = None;
         if colors.contains_key(&role.id()) {
-            style = Some("background-color: #".to_string() + &colors[&role.id()] + ";")
+            style = Some("background-color: ".to_string() + &colors[&role.id()] + ";")
         }
         let onclick;
         {
@@ -141,7 +148,7 @@ fn extra_controls(sort: Sort, business: BusinessContext) -> Html {
 }
 
 impl Employee {
-    pub fn make_row(&self, business: BusinessContext, held_block: UseStateHandle<TimeBlock>) -> Html {
+    pub fn make_row(&self, business: BusinessContext, held_block: UseStateHandle<TimeBlock>, ) -> Html {
         let colors = &business.role_colors;
         let mut row = vec![];
         row.push(html!(
@@ -161,7 +168,7 @@ impl Employee {
 
             let mut style = None;
             if colors.contains_key(&role) {
-                style = Some("background-color: #".to_string() + &colors[&role] + ";")
+                style = Some("background-color: ".to_string() + &colors[&role] + ";")
             }
 
             if role == 0 {
@@ -235,35 +242,4 @@ pub fn ScheduleCopy() -> Html {
         <input ref={input_ref} value={schedule}/>
         <input type="button" value="Load Schedule" onclick={onclick} />
     </div>)
-}
-
-const SEPERATOR: &'static str = ",";
-const NEWLINE: &'static str = "--";
-fn schedule_to_csv(business: BusinessContext) -> String {
-    let mut result = String::new();
-    for role in business.employees.values() {
-        result += &(role.id.to_string() + SEPERATOR);
-        for time_index in role.assigned.iter() {
-            result += &(time_index.to_string() + SEPERATOR);
-        }
-        result += NEWLINE;
-    }
-    result
-}
-
-pub fn csv_to_schedule(csv: String) -> core::result::Result<HashMap<usize, Vec<usize>>, ParseIntError> {
-    let mut result = HashMap::new();
-    for line in csv.split(&(SEPERATOR.to_string() + NEWLINE)) {
-        if line.is_empty() {
-            continue;
-        }
-        let mut parts = line.split(SEPERATOR);
-        let id: usize = parts.next().unwrap().parse()?;
-        let mut assigned = vec![];
-        for time in parts {
-            assigned.push(time.parse::<usize>()?);
-        }
-        result.insert(id, assigned);
-    }
-    Ok(result)
 }
