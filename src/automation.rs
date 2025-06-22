@@ -59,7 +59,7 @@ impl Business {
                         curr_employee = 0;
                     }
                     if employees[curr_employee].roles.contains(&role.id()) && employees[curr_employee].assigned[time_index] == 1 {
-                        employees[curr_employee].assign_area(role, time_index, crate::settings::DEFAULT_SHIFT);
+                        employees[curr_employee].assign_area(role, time_index, crate::business_tab::DEFAULT_SHIFT);
                         curr_employee += 1;
                         assigned = role.assigned().into();
                         break;

@@ -2,10 +2,12 @@ use std::{collections::HashMap, io::{Read, Write}};
 
 use chrono::NaiveTime;
 
-use crate::{data::{Business, RoleTrait}, BusinessContext};
+use crate::{data::{Business, RoleTrait}, settings::Settings, BusinessContext};
+
+pub const SETTINGS_DELIMITER: char = ';';
 
 /// Write current business info (roles, employees, rarely changing info) to the page hash (url query section)
-pub fn write_settings(business: &Business) {
+pub fn write_business(business: &Business) {
     let serialized = match ron::to_string(business) {
         // Ok(s) => "business=".to_string() + &s,
         Ok(s) => s,
@@ -24,51 +26,83 @@ pub fn write_settings(business: &Business) {
         .expect("Could not pull location");
     let zip = "zip=".to_string() + &encoded_to_string(encoded);
 
-    let _ = location.set_hash(match serialized.len() < zip.len() {
-        // true => &serialized,
-        // false => &zip,
-        _ => &zip
-    });
+    let _ = location.set_hash(&zip);
 }
 
-/// Read business info from page hash
-pub fn read_settings() -> Option<Business> {
+pub fn write_settings(settings: Settings) {
+    let settings_query = settings.query_string();
+
     let location = web_sys::window()
         .expect("Could not pull window")
         .document()
         .expect("Could not pull document")
         .location()
         .expect("Could not pull location");
-    let mut hash = location.hash().expect("Could not pull hash");
-    let data = hash.split_off(match hash.find("=") {
-        Some(i) => i + 1,
-        None => {log::warn!("Hash found, but is not valid business information. Proceeding with sample."); return None;},
-    });
-    match hash.as_str() {
-        "#business=" => {
-            match ron::from_str(&data) {
-                Ok(business) => return Some(business),
-                Err(e) => {log::warn!("Failed to deserialize data; {}\n{}", e, data); return None;},
-            }
-        },
-        "#zip=" => {
-            let from_string = match encoded_from_string(data) {
-                Ok(e) => e,
-                Err(e) => {log::warn!("Failed to prep incoming zip for decoding; {}", e); return None;},
-            };
-            let mut decoder = flate2::read::ZlibDecoder::new(from_string.as_slice());
-            let mut decoded = String::new();
-            if let Err(e) = decoder.read_to_string(&mut decoded) {
-                log::warn!("Failed to decode data; {}", e); 
-                return None;
-            }
-            match ron::from_str(&decoded) {
-                Ok(business) => return Some(business),
-                Err(e) => {log::warn!("Failed to deserialize decoded data; {}", e); return None;},
-            }
-        },
-        _ => {log::warn!("Hash found, but is not valid business information. Proceeding with sample."); return None;}
+
+    let _ = location.set_search(&settings_query);
+}
+
+/// Read business info from page hash
+pub fn read_settings() -> (Option<Business>, Option<Settings>) {
+    let mut result = (None, None);
+
+    let location = web_sys::window()
+        .expect("Could not pull window")
+        .document()
+        .expect("Could not pull document")
+        .location()
+        .expect("Could not pull location");
+
+    'zip: {
+        let mut hash = location.hash().expect("Could not pull hash");
+        if hash.is_empty() {
+            log::info!("Hash found, but empty. Assuming no business information was provided and proceeding with sample.");
+            break 'zip;
+        }
+        let data = hash.split_off(match hash.find("=") {
+            Some(i) => i + 1,
+            None => {log::warn!("Hash found, but is not valid business information. Proceeding with sample."); break 'zip;},
+        });
+        match hash.as_str() {
+            "#zip=" => {
+                let from_string = match encoded_from_string(data) {
+                    Ok(e) => e,
+                    Err(e) => {log::warn!("Failed to prep incoming zip for decoding; {}", e); break 'zip;},
+                };
+                let mut decoder = flate2::read::ZlibDecoder::new(from_string.as_slice());
+                let mut decoded = String::new();
+                if let Err(e) = decoder.read_to_string(&mut decoded) {
+                    log::warn!("Failed to decode data; {}", e); 
+                    break 'zip;
+                }
+                match ron::from_str(&decoded) {
+                    Ok(business) => result = (business, result.1),
+                    Err(e) => {log::warn!("Failed to deserialize decoded data; {}", e); break 'zip;},
+                }
+            },
+            _ => {log::warn!("Hash found, but is not valid business information. Proceeding with sample."); break 'zip;}
+        }
     }
+
+    'settings: {
+        let mut query = location.search().expect("Could not pull search");
+        if query.is_empty() {
+            log::info!("Query found, but empty. Assuming no settings information was provided and proceeding with default.");
+            break 'settings;
+        }
+        let data = query.split_off(match query.find("=") {
+            Some(i) => i+1,
+            None => {log::warn!("Query found, but is not valid settings information. Proceeding with default."); break 'settings;},
+        });
+        match query.as_str() {
+            "?settings=" => {
+                result = (result.0, Some(Settings::from_query(&data)));
+            },
+            _ => {log::warn!("Query found, but is not valid settings information. Proceeding with default."); break 'settings;}
+        }
+    }
+
+    result
 }
 
 fn encoded_to_string(bytes: Vec<u8>) -> String {

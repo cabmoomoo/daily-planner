@@ -2,7 +2,7 @@ use chrono::NaiveTime;
 use log::warn;
 use yew::prelude::*;
 
-use crate::{data::RoleTrait, persistence::write_settings, scheduler::{blocks::HeldBlock, TimeBlock}};
+use crate::{data::RoleTrait, persistence::write_business, scheduler::{blocks::HeldBlock, TimeBlock}};
 
 #[derive(Clone, PartialEq)]
 pub enum BusinessEvents {
@@ -170,7 +170,7 @@ impl Reducible for crate::data::Business {
             BusinessEvents::LoadSchedule { schedule } => {business.load_schedule(schedule); update_fragment = false;}
         }
         if update_fragment {
-            write_settings(&business);
+            write_business(&business);
         }
         return business.into()
     }

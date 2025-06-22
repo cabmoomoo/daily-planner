@@ -37,16 +37,12 @@ pub struct Business {
     #[serde(skip)]
     pub role_colors: HashMap<usize, AttrValue>
 } impl Business {
-    pub fn init() -> Business {
-        let mut business = match read_settings() {
-            Some(b) => b,
-            None => {return Business::sample();},
-        };
-        for (_, role) in business.roles.iter() {
-            business.role_colors.insert(role.id(), role.color());
+    pub fn init(&mut self) {
+        for (_, role) in self.roles.iter() {
+            self.role_colors.insert(role.id(), role.color());
         }
-        business.update_business_hours(business.open, business.close);
-        business
+        self.update_business_hours(self.open, self.close);
+        // business
     }
     
     pub fn new_role(&mut self, name: AttrValue) {
@@ -262,12 +258,6 @@ pub trait RoleTrait: std::fmt::Debug {
     fn is_empty(&self) -> bool;
 
     fn blank_out(&mut self, blocks: usize);
-} impl dyn RoleTrait {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.sort().cmp(&other.sort())
-            .then(self.name().cmp(&other.name()))
-            .then(self.id().cmp(&other.id()))
-    }
 }
 
 #[enum_dispatch(RoleTrait)]
@@ -510,15 +500,7 @@ struct MultiRole {
         }
         MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty: true }
     }
-    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized {
-    //     MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty }
-    // }
-    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized {
-        MultiRole { id: id.clone(), name, sort: id, assigned: vec![], color, empty: true }
-    }
 }
-
-// pub type Result<T> = std::result::Result<T, EmployeeError>;
 
 #[derive(Debug)]
 pub enum EmployeeError {

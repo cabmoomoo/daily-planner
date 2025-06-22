@@ -1,6 +1,6 @@
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
-use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext, Sort};
+use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, business_tab::DEFAULT_SHIFT, BusinessContext, Sort};
 
 fn table_header(business: UseReducerHandle<Business>) -> Html {
     let mut table_header = vec![];
