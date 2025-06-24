@@ -73,6 +73,11 @@ div.controls {
 }
 
 
+.settings-tab thead tr th {
+    text-align: center;
+}
+
+
  /* Tooltip container */
 .tooltip {
   position: relative;
@@ -121,32 +126,47 @@ div.controls {
 } 
 
 
-.print-area {
+body > .print-area {
     display: none;
+}
+
+div.print-preview {
+    border-style: solid;
+    width: 8.5in;
+    height: 11in;
+    position: absolute;
+    left: 50%;
+    margin-left: -4.25in;
+}
+
+.print-area {
+    display: flex;
+}
+
+.print-column {
+    border-right: 1px solid black;
+    padding: 0 5px 0;
+}
+
+.print-column span {
+    float: right;
+    padding-left: 1pt;
+}
+
+ul.no-bullets {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
 }
 
 @media print {
 
-    body {
-        visibility: hidden;
+    body > * {
+        display: none !important;
     }
 
-    .print-area {
-        visibility: visible;
-        display: flex;
-        width: 5in;
-        height: 4in;
-    }
-
-    .print-column {
-        border-right: 1px solid black;
-        padding: 0 5px 0;
-    }
-
-    ul.no-bullets {
-        list-style-type: none;
-        margin: 0;
-        padding: 0;
+    body > .print-area {
+        display: flex !important;
     }
 
 }

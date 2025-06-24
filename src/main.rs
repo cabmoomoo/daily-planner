@@ -1,9 +1,11 @@
+use std::ops::Deref;
+
 use data::*;
 use yew::prelude::*;
 use print::PrintTable;
 use business_tab::BusinessTab;
 
-use crate::{persistence::read_settings, scheduler::{Controls, ScheduleCopy, Table}, settings::Settings};
+use crate::{events::BusinessEvents, persistence::{read_settings, write_settings}, scheduler::{Controls, ScheduleCopy, Table}, settings::Settings};
 
 mod automation;
 mod business_tab;
@@ -36,24 +38,32 @@ pub enum Tabs {
 
 #[function_component]
 fn App() -> Html {
-    let (business, settings) = {
-        let read = read_settings();
-        let mut business = match read.0 {
-            Some(b) => b,
-            None => Business::sample(),
-        };
-        business.init();
-        let settings = match read.1 {
-            Some(s) => s,
-            None => Settings::default(),
-        };
-        (use_reducer_eq(|| business), use_state_eq(|| settings))
-    };
+    let settings = use_state_eq(|| Settings::default());
+    let business = use_reducer_eq(|| Business::sample(settings.deref()));
+    
+    {
+        let (business, settings) = (business.clone(), settings.clone());
+        use_effect_with((), move |_| {
+            let read = read_settings();
+            match read.1 {
+                Some(s) => settings.set(s),
+                None => (),
+            }
+            match read.0 {
+                Some(mut b) => {
+                    b.init(settings.app.open.clone(), settings.app.close.clone(), settings.app.block_size.clone());
+                    business.dispatch(BusinessEvents::InitFromHash { new_business: b });
+                },
+                None => (),
+            }
+        });
+    }
+    
     let tab = use_state_eq(|| Tabs::Schedule);
     let sort_table = use_state_eq(|| EmployeeSort::Name);
     let sort_settings = use_state_eq(|| EmployeeSort::Name);
 
-    
+    write_settings(settings.deref());
     // let mut tab_styles = vec![None; 3];
     // match tab.deref() {
     //     Tabs::Schedule => tab_styles[0] = Some("mui--is-active"),
@@ -86,8 +96,8 @@ fn App() -> Html {
             </div>
         </ContextProvider<Sort>>
         <div class={classes!("mui-tabs__pane", tab.curr_tab(Tabs::Settings))}>
-            <div class={"pane-content"}>
-
+            <div class={"pane-content settings-tab"}>
+                <settings::SettingsTab />
             </div>
         </div>
         </ContextProvider<SettingsContext>>
@@ -117,7 +127,7 @@ fn TabBar() -> Html {
         <ul class="mui-tabs__bar mui-tabs__bar--justified">
             <li class={tab.curr_tab(Tabs::Business)} onclick={move |_| {business_context.set(Tabs::Business);}}>{"Business"}</li>
             <li class={tab.curr_tab(Tabs::Schedule)} onclick={move |_| {schedule_context.set(Tabs::Schedule);}}>{"Schedule"}</li>
-            <li class={tab.curr_tab(Tabs::Settings)} onclick={move |_| {settings_context.set(Tabs::Settings);}}>{"Schedule"}</li>
+            <li class={tab.curr_tab(Tabs::Settings)} onclick={move |_| {settings_context.set(Tabs::Settings);}}>{"Settings"}</li>
         </ul>
     )
 }

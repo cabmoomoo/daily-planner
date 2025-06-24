@@ -4,8 +4,6 @@ use yew::prelude::*;
 
 use crate::{data::*, events::BusinessEvents, BusinessContext};
 
-pub const DEFAULT_SHIFT: usize = 4;
-
 #[function_component]
 pub fn BusinessTab() -> Html {
     let business = use_context::<BusinessContext>().expect("No ctx found");
@@ -214,10 +212,7 @@ fn RoleNew() -> Html {
 }
 
 #[derive(Properties, PartialEq)]
-struct EmpProp {
-    emp: Employee
-}
-
+struct EmpProp {emp: Employee}
 #[function_component]
 fn EmpRow(props: &EmpProp) -> Html {
     let business = use_context::<BusinessContext>().expect("No ctx found");

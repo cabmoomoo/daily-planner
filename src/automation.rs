@@ -1,10 +1,10 @@
-use crate::data::{Business, Role, RoleTrait};
+use crate::{data::{Business, Role, RoleTrait}, SettingsContext};
 
 impl Business {
 
     pub fn schedule_lunch(&mut self) {
         // Reset the schedule
-        self.update_business_hours(self.open, self.close);
+        self.update_business_hours(self.open, self.close, self.block_size);
 
         let lunch = self.roles.get_mut(&2).unwrap();
 
@@ -37,7 +37,7 @@ impl Business {
         }
     }
 
-    pub fn schedule_roles(&mut self) {
+    pub fn schedule_roles(&mut self, settings: SettingsContext) {
         let mut employees = vec![];
         for emp in self.employees.values_mut() {
             if emp.scheduled {
@@ -59,7 +59,7 @@ impl Business {
                         curr_employee = 0;
                     }
                     if employees[curr_employee].roles.contains(&role.id()) && employees[curr_employee].assigned[time_index] == 1 {
-                        employees[curr_employee].assign_area(role, time_index, crate::business_tab::DEFAULT_SHIFT);
+                        employees[curr_employee].assign_area(role, time_index, settings.app.shift_length);
                         curr_employee += 1;
                         assigned = role.assigned().into();
                         break;
