@@ -5,7 +5,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use yew::{AttrValue, Properties};
 
-use crate::persistence::read_settings;
+use crate::settings::Settings;
 
 const DEFAULT_COLOR: &'static str = "#AAC406";
 
@@ -27,26 +27,29 @@ pub enum BusinessError {
 
 #[derive(Clone, PartialEq, Properties, Debug, Serialize, Deserialize)]
 pub struct Business {
-    pub open: NaiveTime,
-    pub close: NaiveTime,
     pub roles: HashMap<usize, Role>,
     pub employees: HashMap<usize, Employee>,
-    // In production, blocks and block_size may not need to be public
-    pub blocks: usize, // The number of blocks within the current business hours
-    pub block_size: TimeDelta, // The size of the schedule's blocks
+    
+    // Computed
     #[serde(skip)]
-    pub role_colors: HashMap<usize, AttrValue>
+    pub role_colors: HashMap<usize, AttrValue>,
+    #[serde(skip)]
+    pub blocks: usize, // The number of blocks within the current business hours
+
+    // Provided by settings
+    #[serde(skip)]
+    pub open: NaiveTime,
+    #[serde(skip)]
+    pub close: NaiveTime,
+    #[serde(skip)]
+    pub block_size: TimeDelta, // The size of the schedule's blocks
 } impl Business {
-    pub fn init() -> Business {
-        let mut business = match read_settings() {
-            Some(b) => b,
-            None => {return Business::sample();},
-        };
-        for (_, role) in business.roles.iter() {
-            business.role_colors.insert(role.id(), role.color());
+    pub fn init(&mut self, open: NaiveTime, close: NaiveTime, block_size: TimeDelta) {
+        for (_, role) in self.roles.iter() {
+            self.role_colors.insert(role.id(), role.color());
         }
-        business.update_business_hours(business.open, business.close);
-        business
+        self.update_business_hours(open, close, block_size);
+        // business
     }
     
     pub fn new_role(&mut self, name: AttrValue) {
@@ -108,9 +111,10 @@ pub struct Business {
         }
     }
 
-    pub fn update_business_hours(&mut self, open: NaiveTime, close: NaiveTime) {
+    pub fn update_business_hours(&mut self, open: NaiveTime, close: NaiveTime, block_size: TimeDelta) {
         self.open = open;
         self.close = close;
+        self.block_size = block_size;
         self.blocks = 0;
         let mut test_time = self.open.clone();
         let mut empty_vec: Vec<Vec<usize>> = vec![];
@@ -262,12 +266,6 @@ pub trait RoleTrait: std::fmt::Debug {
     fn is_empty(&self) -> bool;
 
     fn blank_out(&mut self, blocks: usize);
-} impl dyn RoleTrait {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.sort().cmp(&other.sort())
-            .then(self.name().cmp(&other.name()))
-            .then(self.id().cmp(&other.id()))
-    }
 }
 
 #[enum_dispatch(RoleTrait)]
@@ -328,7 +326,7 @@ pub enum RoleAssigned {
 }
 
 #[derive(Clone, PartialEq, Debug, Properties, Serialize, Deserialize)]
-struct SingleRole {
+pub struct SingleRole {
     id: usize,
     name: AttrValue,
     sort: usize,
@@ -408,7 +406,7 @@ struct SingleRole {
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-struct MultiRole {
+pub struct MultiRole {
     id: usize,
     name: AttrValue,
     sort: usize,
@@ -510,15 +508,7 @@ struct MultiRole {
         }
         MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty: true }
     }
-    // fn new_with_assigned(id: usize, name: AttrValue, assigned: Vec<usize>, empty: bool) -> Self where Self: Sized {
-    //     MultiRole { id: id.clone(), name, sort: id, assigned, color: DEFAULT_COLOR.into(), empty }
-    // }
-    fn new_blank(id: usize, name: AttrValue, color: AttrValue) -> Self where Self: Sized {
-        MultiRole { id: id.clone(), name, sort: id, assigned: vec![], color, empty: true }
-    }
 }
-
-// pub type Result<T> = std::result::Result<T, EmployeeError>;
 
 #[derive(Debug)]
 pub enum EmployeeError {
@@ -745,9 +735,10 @@ fn business_base() -> Role {
 
 impl Business {
     /// Generate a sample business with 3 roles and 4 employees
-    pub fn sample() -> Business {
-        let open = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
-        let close = NaiveTime::from_hms_opt(19, 0, 0).unwrap();
+    pub fn sample(settings: &Settings) -> Business {
+        let open = settings.app.open.clone();
+        let close = settings.app.close.clone();
+        let block_size = settings.app.block_size.clone();
         let role_vec = vec![
             business_base(),
             SingleRole::new_blank(3, "Role 1".into(), "#00AAFF".into()).into(),
@@ -824,10 +815,10 @@ impl Business {
             roles, 
             employees,
             blocks: 0,
-            block_size: TimeDelta::minutes(30),
+            block_size: block_size,
             role_colors
         };
-        business.update_business_hours(open, close);
+        business.update_business_hours(open, close, block_size);
         // business.schedule_lunch();
         // business.schedule_roles();
         business

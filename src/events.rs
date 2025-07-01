@@ -1,8 +1,8 @@
-use chrono::NaiveTime;
+use chrono::{NaiveTime, TimeDelta};
 use log::warn;
 use yew::prelude::*;
 
-use crate::{data::RoleTrait, persistence::write_settings, scheduler::{blocks::HeldBlock, TimeBlock}};
+use crate::{data::{Business, RoleTrait}, persistence::write_business, scheduler::{blocks::HeldBlock, TimeBlock}, SettingsContext};
 
 #[derive(Clone, PartialEq)]
 pub enum BusinessEvents {
@@ -10,7 +10,7 @@ pub enum BusinessEvents {
     NewEmployee { name: AttrValue },
     DeleteRole { role: usize },
     DeleteEmployee { emp: usize },
-    UpdateBusinessHours { open: NaiveTime, close: NaiveTime },
+    UpdateBusinessHours { open: NaiveTime, close: NaiveTime, block_size: TimeDelta },
     UpdateRoleSort { role_id: usize, increase_priority: bool },
     UpdateRoleColor { role_id: usize, color: String },
     ToggleRoleMulti { role_id: usize },
@@ -23,8 +23,10 @@ pub enum BusinessEvents {
     DragAssignBlock { target_block: TimeBlock, drag_block: TimeBlock, held_block: HeldBlock },
 
     ScheduleLunch,
-    ScheduleRoles,
-    LoadSchedule { schedule: String }
+    ScheduleRoles { settings: SettingsContext },
+    LoadSchedule { schedule: String },
+
+    InitFromHash { new_business: Business }
 }
 
 impl Reducible for crate::data::Business {
@@ -38,7 +40,10 @@ impl Reducible for crate::data::Business {
             BusinessEvents::NewEmployee { name } => business.new_employee(name),
             BusinessEvents::DeleteRole { role } => business.delete_role(role),
             BusinessEvents::DeleteEmployee { emp } => business.delete_employee(emp),
-            BusinessEvents::UpdateBusinessHours { open, close } => business.update_business_hours(open, close),
+            BusinessEvents::UpdateBusinessHours { open, close, block_size } => {
+                business.update_business_hours(open, close, block_size);
+                update_fragment = false;
+            },
             BusinessEvents::UpdateRoleSort { role_id, increase_priority } => {
                 // let curr_role = match business.roles.get_mut(&role_id) {
                 //     Some(role) => role,
@@ -79,8 +84,12 @@ impl Reducible for crate::data::Business {
             BusinessEvents::ToggleRoleMulti { role_id } => business.toggle_role_multi(role_id),
             BusinessEvents::UpdateEmployeeHours { employee, clock_in, clock_out } => {
                 business.update_employee_hours(employee, clock_in.parse().unwrap(), clock_out.parse().unwrap());
+                update_fragment = false;
             },
-            BusinessEvents::ToggleEmployeeScheduled { employee } => business.toggle_employee_scheduled(employee),
+            BusinessEvents::ToggleEmployeeScheduled { employee } => {
+                business.toggle_employee_scheduled(employee);
+                update_fragment = false;
+            },
             BusinessEvents::UpdateEmployeeLunch { emp_id, blocks } => {
                 match business.employees.get_mut(&emp_id) {
                     Some(emp) => {emp.lunch = blocks},
@@ -166,11 +175,16 @@ impl Reducible for crate::data::Business {
                 update_fragment = false;
             }
             BusinessEvents::ScheduleLunch => {business.schedule_lunch(); update_fragment = false;},
-            BusinessEvents::ScheduleRoles => {business.schedule_roles(); update_fragment = false;},
-            BusinessEvents::LoadSchedule { schedule } => {business.load_schedule(schedule); update_fragment = false;}
+            BusinessEvents::ScheduleRoles {settings} => {business.schedule_roles(settings); update_fragment = false;},
+            BusinessEvents::LoadSchedule { schedule } => {business.load_schedule(schedule); update_fragment = false;},
+
+            BusinessEvents::InitFromHash { new_business } => {
+                business = new_business;
+                update_fragment = false;
+            }
         }
         if update_fragment {
-            write_settings(&business);
+            write_business(&business);
         }
         return business.into()
     }

@@ -1,6 +1,6 @@
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
-use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, settings::DEFAULT_SHIFT, BusinessContext, Sort};
+use crate::{data::*, events::BusinessEvents, persistence::schedule_to_csv, scheduler::blocks::*, BusinessContext, SettingsContext, Sort};
 
 fn table_header(business: UseReducerHandle<Business>) -> Html {
     let mut table_header = vec![];
@@ -30,6 +30,7 @@ fn table_header(business: UseReducerHandle<Business>) -> Html {
 #[function_component]
 pub fn Table() -> Html {
     let business = use_context::<BusinessContext>().expect("No ctx found");
+    let settings = use_context::<SettingsContext>().expect("No settings context found");
     let sort = use_context::<Sort>().expect("Sort context not found");
     let held_block = use_state_eq(|| TimeBlock::default());
 
@@ -58,9 +59,9 @@ pub fn Table() -> Html {
         //     {table_header.clone()}
         //     {role_table}
         // </table>
-        {table_key(business.clone(), held_block.clone(), sort.clone())}
+        {table_key(business.clone(), settings.clone(), held_block.clone(), sort.clone())}
         <br />
-        {extra_controls(sort, business)}
+        {extra_controls(sort, business, settings)}
         <br />
         <table class={"mui-table mui-table--bordered"}>
             // <thead class="time">
@@ -72,18 +73,18 @@ pub fn Table() -> Html {
 }
 
 
-fn table_key(business: BusinessContext, held_block: HeldBlock, sort: Sort) -> Html {
-    // let business = use_context::<BusinessContext>().expect("No ctx found");
-    // let held_block = use_context::<HeldBlock>().expect("No held block ctx found");
+fn table_key(business: BusinessContext, settings: SettingsContext, held_block: HeldBlock, sort: Sort) -> Html {
     let colors = &business.role_colors;
 
+    let mut roles: Vec<&Role> = business.roles.values().collect();
+    roles.sort();
     let mut role_columns = vec![];
-    for (_, role) in business.roles.iter() {
+    for role in roles {
         let block_single = TimeBlock::new_simple(0, 0, role.id());
         let block_multi = TimeBlock { emp_id: 0, time_index: 0, role: role.id(), len_index: 0,
             len: match role.id() == 2 {
-                true => 2,
-                false => DEFAULT_SHIFT,
+                true => 2.max(settings.app.lunch_duration),
+                false => settings.app.shift_length,
             }
         };
         let mut style = None;
@@ -111,7 +112,7 @@ fn table_key(business: BusinessContext, held_block: HeldBlock, sort: Sort) -> Ht
     </div>)
 }
 
-fn extra_controls(sort: Sort, business: BusinessContext) -> Html {
+fn extra_controls(sort: Sort, business: BusinessContext, settings: SettingsContext) -> Html {
 
     let (snc, scic, scoc);
     {
@@ -131,8 +132,9 @@ fn extra_controls(sort: Sort, business: BusinessContext) -> Html {
     let schedule_callback;
     {
         let (b1, b2) = (business.clone(), business.clone());
+        let settings = settings.clone();
         lunch_callback = Callback::from(move |_| b1.dispatch(BusinessEvents::ScheduleLunch));
-        schedule_callback = Callback::from(move |_| b2.dispatch(BusinessEvents::ScheduleRoles));
+        schedule_callback = Callback::from(move |_| b2.dispatch(BusinessEvents::ScheduleRoles { settings: settings.clone() }));
     }
 
     html!(<div class="controls">

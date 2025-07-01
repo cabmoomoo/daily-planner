@@ -1,10 +1,12 @@
+use chrono::Timelike;
 use yew::prelude::*;
 
-use crate::{data::{Role, RoleTrait}, BusinessContext};
+use crate::{data::{Role, RoleTrait}, BusinessContext, SettingsContext};
 
 #[function_component]
 pub fn PrintTable() -> Html {
     let business = use_context::<BusinessContext>().expect("No ctx found");
+    let settings = use_context::<SettingsContext>().expect("Settings context not found");
 
     let mut columns = vec![];
 
@@ -30,9 +32,12 @@ pub fn PrintTable() -> Html {
                                 log::warn!("Failed to find employee id {} when generating print table for role {}", assigned[last_group.0], role.name());
                                 break 'block;},
                         };
-                        let row = format!("{} {}-{}", employee.name, last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string());
+                        // let row = format!("{} {}-{}", employee.name, last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string());
                         emps.push(html!(
-                            <li>{row}</li>
+                            <li>
+                                {employee.name.clone()}
+                                <span>{format!(" {}-{}", time_string(&last_group.1), time_string(&curr_time))}</span>
+                            </li>
                         ));
                     }
                     last_group = (assigned[i].clone(),curr_time.clone());
@@ -50,9 +55,12 @@ pub fn PrintTable() -> Html {
                         log::warn!("Failed to find employee id {} when generating print table for role {}", assigned[last_group.0], role.name());
                         break 'block;},
                 };
-                let row = format!("{} {}-{}", employee.name, last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string());
+                // let row = format!("{} {}-{}", employee.name, last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string());
                 emps.push(html!(
-                    <li>{row}</li>
+                    <li>
+                        {employee.name.clone()}
+                        <span>{format!(" {}-{}", time_string(&last_group.1), time_string(&curr_time))}</span>
+                    </li>
                 ));
             }
         }
@@ -91,9 +99,12 @@ pub fn PrintTable() -> Html {
                         continue;
                     },
                 };
-                let row = format!("{} {}",employee.name,curr_time.format("%-I:%M").to_string());
+                // let row = format!("{} {}",employee.name,curr_time.format("%-I:%M").to_string());
                 emps.push(html!(
-                    <li>{row}</li>
+                    <li>
+                        {employee.name.clone()}{" "}
+                        <span>{time_string(&curr_time)}</span>
+                    </li>
                 ));
             }
 
@@ -110,7 +121,21 @@ pub fn PrintTable() -> Html {
         ));
     }
 
-    html!(<div class="print-area">
+    let style = format!(
+        "width: {}in; height: {}in; font-size: {}pt", 
+        settings.print.width, 
+        settings.print.height,
+        settings.print.font_size
+    );
+
+    html!(<div class="print-area" style={style}>
         {for columns}
     </div>)
+}
+
+fn time_string(time: &chrono::NaiveTime) -> String {
+    if time.minute() != 0 {
+        return time.format("%-I:%M").to_string();
+    }
+    time.format("%-I").to_string()
 }
