@@ -1,3 +1,4 @@
+use chrono::Timelike;
 use yew::prelude::*;
 
 use crate::{data::{Role, RoleTrait}, BusinessContext, SettingsContext};
@@ -35,7 +36,7 @@ pub fn PrintTable() -> Html {
                         emps.push(html!(
                             <li>
                                 {employee.name.clone()}
-                                <span>{format!(" {}-{}", last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string())}</span>
+                                <span>{format!(" {}-{}", time_string(&last_group.1), time_string(&curr_time))}</span>
                             </li>
                         ));
                     }
@@ -58,7 +59,7 @@ pub fn PrintTable() -> Html {
                 emps.push(html!(
                     <li>
                         {employee.name.clone()}
-                        <span>{format!(" {}-{}", last_group.1.format("%-I:%M").to_string(), curr_time.format("%-I:%M").to_string())}</span>
+                        <span>{format!(" {}-{}", time_string(&last_group.1), time_string(&curr_time))}</span>
                     </li>
                 ));
             }
@@ -102,7 +103,7 @@ pub fn PrintTable() -> Html {
                 emps.push(html!(
                     <li>
                         {employee.name.clone()}{" "}
-                        <span>{curr_time.format("%-I:%M").to_string()}</span>
+                        <span>{time_string(&curr_time)}</span>
                     </li>
                 ));
             }
@@ -130,4 +131,11 @@ pub fn PrintTable() -> Html {
     html!(<div class="print-area" style={style}>
         {for columns}
     </div>)
+}
+
+fn time_string(time: &chrono::NaiveTime) -> String {
+    if time.minute() != 0 {
+        return time.format("%-I:%M").to_string();
+    }
+    time.format("%-I").to_string()
 }
